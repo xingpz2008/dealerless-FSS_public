@@ -1,0 +1,13 @@
+/test.out
+/test.cpp
+client.dat
+server.dat
+*.out
+build/
+cmake/
+cmake-build-debug/
+*/CMakeCache.txt
+*/cmake_install.cmake
+*/Makefile
+CMakeFiles/
+cmake-build-debug-/
