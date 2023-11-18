@@ -35,7 +35,7 @@ DPFKeyPack keyGenDPF(int party_id, int Bin, int Bout,
                      GroupElement idx, GroupElement payload) __attribute__((optimize("O0")));
 
 DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
-                      GroupElement idx, GroupElement* payload) __attribute__((optimize("O0")));
+                      GroupElement idx, GroupElement* payload, bool call_from_DCF = false) __attribute__((optimize("O0")));
 
 void evalDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &key) __attribute__((optimize("O0")));
 void evaliDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &key) __attribute__((optimize("O0")));

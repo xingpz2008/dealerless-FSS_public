@@ -319,7 +319,7 @@ DPFKeyPack keyGenDPF(int party_id, int Bin, int Bout,
 
 
 DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
-                     GroupElement idx, GroupElement* payload)
+                     GroupElement idx, GroupElement* payload, bool call_from_DCF = false)
 {
     // This is the 2pc generation of iDPF Key, proceed with multiple payload
     static const block notOneBlock = osuCrypto::toBlock(~0, ~1);
@@ -355,13 +355,20 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
     // Particularly, we construct from lsb to msb, then reverse it.
     u8* real_idx = new u8[Bin];
     u8 level_and_res = 0;
-    for (int i = 0; i < Bin; i++) {
-        real_idx[Bin - i - 1] = idx[Bin - i - 1] ^ level_and_res;
-        std::cout << "Idx (from lsb) = " << (int) idx[Bin - i - 1] << std::endl;
-        std::cout << "Real idx " << Bin - i - 1 << "= " << (int)real_idx[Bin - i - 1];
-        level_and_res = check_bit_overflow(party_id, idx[Bin - i - 1], level_and_res, peer);
-        std::cout << ", level and res = " << (int)level_and_res << std::endl;
+    if (call_from_DCF){
+        for (int i = 0; i < Bin; i++){
+            real_idx[i] = idx[i];
+        }
+    }else{
+        for (int i = 0; i < Bin; i++) {
+            real_idx[Bin - i - 1] = idx[Bin - i - 1] ^ level_and_res;
+            std::cout << "Idx (from lsb) = " << (int) idx[Bin - i - 1] << std::endl;
+            std::cout << "Real idx " << Bin - i - 1 << "= " << (int)real_idx[Bin - i - 1];
+            level_and_res = check_bit_overflow(party_id, idx[Bin - i - 1], level_and_res, peer);
+            std::cout << ", level and res = " << (int)level_and_res << std::endl;
+        }
     }
+
 
     for (int i = 0; i < Bin; i++){
 
