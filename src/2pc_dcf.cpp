@@ -56,7 +56,8 @@ iDCFKeyPack keyGeniDCF(int party_id, int Bin, int Bout,
 
     // Step 3. Invoke Key Gen of iDPF
     // Here we start from real_payload[1], to use beta 2 to beta n
-    DPFKeyPack idpf_key(keyGeniDPF(party_id, Bin - 1, payload->bitsize, real_idx, &(real_payload[1])), true);
+    DPFKeyPack idpf_key(keyGeniDPF(party_id, Bin - 1, payload->bitsize, real_idx, &(real_payload[1])),
+                        true);
 
     return {&idpf_key, &(real_payload[0])};
 }

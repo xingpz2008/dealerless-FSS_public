@@ -472,6 +472,160 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
     return {Bin, Bout, 1, scw, W_CW, tau};
 }
 
+DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
+                      u8* idx, GroupElement* payload, bool call_from_DCF = false)
+{
+    // This is the 2pc generation of iDPF Key, proceed with multiple payload
+    static const block notOneBlock = osuCrypto::toBlock(~0, ~1);
+    static const block notThreeBlock = osuCrypto::toBlock(~0, ~3);
+    const static block pt[2] = {ZeroBlock, OneBlock};
+
+    // Here we initialize the first block as the root node
+    auto s = prng.get<block>();
+    // We maintain a list of seeds, which indicates the nodes on i-th level
+    // We directly request the largest amount of storage, as 2^Bin,
+    int lastLevelNodes = (int)pow(2, Bin);
+    block* levelNodes = new block[lastLevelNodes];
+    block* nextLevelNodes = new block[lastLevelNodes];
+    u8* levelControlBits = new u8[lastLevelNodes];
+    auto* nextLevelControlBits = new u8[lastLevelNodes];
+
+    block ct[2];
+    AES AESInstance;
+    levelNodes[0] = s;
+    levelControlBits[0] = (u8)(party_id-2);
+
+
+    // Variants in this area indicates generation results -> DPFKeyPack
+    u8* tau = new u8[Bin * 2];
+    block* scw = new block[Bin + 1];
+    scw[0] = s;
+
+    // Variants for iDPF CW calculation
+    uint64_t levelElements[lastLevelNodes];
+    GroupElement W_CW[Bin];
+
+    // Step 0: prepare for the DigDec decomposition of x from msb to lsb
+    // Particularly, we construct from lsb to msb, then reverse it.
+    u8* real_idx = new u8[Bin];
+    u8 level_and_res = 0;
+    if (call_from_DCF){
+        for (int i = 0; i < Bin; i++){
+            real_idx[i] = idx[i];
+        }
+    }else{
+        for (int i = 0; i < Bin; i++) {
+            real_idx[Bin - i - 1] = idx[Bin - i - 1] ^ level_and_res;
+            std::cout << "Idx (from lsb) = " << (int) idx[Bin - i - 1] << std::endl;
+            std::cout << "Real idx " << Bin - i - 1 << "= " << (int)real_idx[Bin - i - 1];
+            level_and_res = check_bit_overflow(party_id, idx[Bin - i - 1], level_and_res, peer);
+            std::cout << ", level and res = " << (int)level_and_res << std::endl;
+        }
+    }
+
+
+    for (int i = 0; i < Bin; i++){
+
+        block leftChildren = ZeroBlock;
+        block rightChildren = ZeroBlock;
+
+        // First step: expand all the nodes in the previous level
+        // We use 128 bit as the seed, instead of 128-1 in llama
+        // The seeds number is 2^i
+        int expandNum = (int)pow(2, i);
+        for (int j = 0; j < expandNum; j++){
+            // To expand, we first set AES enc keys, with 2^i AES instances
+            AESInstance.setKey(levelNodes[j]);
+
+            // Then we call enc to get 2 blocks, as left and right child in the next level
+            AESInstance.ecbEncTwoBlocks(pt, ct);
+
+            // Add left (resp. right) nodes together
+            leftChildren = leftChildren ^ ct[0];
+            rightChildren = rightChildren ^ ct[1];
+
+            // Store Expansion results
+            nextLevelNodes[2 * j] = ct[0];
+            nextLevelNodes[2 * j + 1] = ct[1];
+        }
+
+        // Second step: Invoke F_MUX and retrieve reconstructed leftChildren or rightChildren
+        // Selection Criterion:
+        // P0 with s0l, t0l=lsb(s0l), s0r, t0r=lsb(s0r)
+        // P1 with s1l, t1l=lsb(s1l), s1r, t1r=lsb(s1r)
+        // if a[x] = 1, get s0, else get s1
+        //u8 real_idx = idx[i] ^ level_and_res;
+        //level_and_res = and_wrapper(party_id, real_idx, peer);
+        uint8_t mux_input = real_idx[i] ^ (party_id-2);
+        block* sigma = new block;
+        multiplexer2(party_id, &mux_input, &leftChildren, &rightChildren, sigma,
+                     (int32_t)1, peer);
+        // TODO: Realize multiplexer2
+
+        // Set tau, note that lsb returns <u8>
+        u8 tau_0 = lsb(leftChildren) ^ real_idx[i] ^ (u8)(party_id - 2);
+        u8 tau_1 = lsb(rightChildren) ^ real_idx[i];
+
+        // Reconstruct sigma, tau
+        reconstruct(sigma);
+        reconstruct(&tau_0);
+        reconstruct(&tau_1);
+
+        // Now we parse CW
+        tau[i * 2] = tau_0;
+        tau[i * 2 + 1] = tau_1;
+        scw[i + 1] = *sigma;
+
+        // Third step: update seeds
+        // For every seed in the level, it should xor t * this_level.CW, where t is the control bit
+        for (int j = 0; j < expandNum; j++){
+            nextLevelControlBits[2 * j] = lsb(nextLevelNodes[2 * j]);
+            nextLevelControlBits[2 * j + 1] = lsb(nextLevelNodes[2 * j + 1]);
+            if (levelControlBits[j] == (u8)1) {
+                nextLevelNodes[2 * j] = nextLevelNodes[2 * j] ^ scw[i + 1];
+                nextLevelNodes[2 * j + 1] = nextLevelNodes[2 * j + 1] ^ scw[i + 1];
+                nextLevelControlBits[2 * j] = nextLevelControlBits[2 * j] ^ tau_0;
+                nextLevelControlBits[2 * j + 1] = nextLevelControlBits[2 * j + 1] ^ tau_1;
+            }
+        }
+
+        for (int j = 0; j < expandNum; j++){
+            // We now move updated seeds to levelNodes list
+            levelNodes[2 * j] = nextLevelNodes[2 * j];
+            levelNodes[2 * j + 1] = nextLevelNodes[2 * j + 1];
+            // We also need to update level Control bits
+            levelControlBits[2 * j] = nextLevelControlBits[2 * j];
+            levelControlBits[2 * j + 1] = nextLevelControlBits[2 * j + 1];
+        }
+
+        // Forth Step: calculate layer-wise CW
+        // To begin with, we add all control bits together
+        uint64_t controlBitSum = 0;
+        uint64_t levelSum = 0;
+        // We also need to add all Converted elements
+        for (int j = 0; j < 2 * expandNum; j++){
+            two_pc_convert(Bout, levelNodes[j], &levelElements[j], &levelNodes[j]);
+            levelSum = levelSum + levelElements[j];
+            controlBitSum = controlBitSum + (uint64_t)levelControlBits[j];
+        }
+        // Get last 2 bits of bits sum to compare
+        u8 cmp_tau_0 = (u8)(controlBitSum & 1);
+        u8 cmp_tau_1 = (u8)((controlBitSum >> 1) & 1);
+        // Calculate [t]
+        // TODO: ADD F_AND here, Correct?
+        u8 t = cmp_2bit(party_id, cmp_tau_1, cmp_tau_0, peer);
+        GroupElement sign(((party_id-2) == 1) ? 1 : -1, Bout);
+        // Sign = -1 for p1, 1 for p0
+        GroupElement W_CW_0 = payload[i] + levelSum * sign;
+        GroupElement W_CW_1 = -payload[i] + levelSum * -sign;
+
+        // TODO: Add mux2 here
+        multiplexer2(party_id, &t, &W_CW_0, &W_CW_1, &W_CW[i], (int32_t)1, peer);
+        reconstruct((int32_t)1, &W_CW[i], Bout);
+    }
+    return {Bin, Bout, 1, scw, W_CW, tau};
+}
+
 void evalDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &key){
     // Eval of 2pc-dpf
     // Initialize with the root node
