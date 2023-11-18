@@ -56,6 +56,13 @@ struct DPFKeyPack{
     DPFKeyPack() {}
 };
 
+struct iDCFKeyPack{
+    DPFKeyPack* idpf_key;
+    GroupElement* beta_0;
+    iDCFKeyPack(DPFKeyPack* idpf_key, GroupElement* beta_0): idpf_key(idpf_key), beta_0(beta_0) {}
+    iDCFKeyPack() {}
+};
+
 inline void freeDCFKeyPack(DCFKeyPack &key){
     delete[] key.k;
     delete[] key.g;

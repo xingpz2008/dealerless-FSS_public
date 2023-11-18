@@ -19,11 +19,11 @@ using namespace osuCrypto;
 // extern uint64_t aes_evals_count;
 
 
-DPFKeyPack keyGeniDCF(int party_id, int Bin, int Bout,
+iDCFKeyPack keyGeniDCF(int party_id, int Bin, int Bout,
                      GroupElement idx, GroupElement* payload);
 
 void evaliDCFNext(int party, uint64_t idx, block* st_s, u8* st_t, block* cw, u8* t_l, u8* t_r,
                   GroupElement* W_cw, block* res_s, u8* res_t, GroupElement* y);
 
-void evaliDCF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &key);
+void evaliDCF(int party, GroupElement *res, GroupElement idx, const iDCFKeyPack &key);
 
