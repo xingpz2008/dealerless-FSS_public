@@ -29,7 +29,7 @@ inline u8 lsb(const block &b)
     return _mm_cvtsi128_si64x(b) & 1;
 }
 
-void two_pc_convert(const int bitsize, const block &b, uint64_t *out, block* out_s);
+void two_pc_convert(int bitsize, block *b, uint64_t *out, block* out_s) __attribute__((optimize("O0")));
 
 DPFKeyPack keyGenDPF(int party_id, int Bin, int Bout,
                      GroupElement idx, GroupElement payload) __attribute__((optimize("O0")));

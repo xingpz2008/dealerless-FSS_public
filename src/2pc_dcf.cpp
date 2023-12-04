@@ -36,6 +36,7 @@ iDCFKeyPack keyGeniDCF(int party_id, int Bin, int Bout,
 
     // Step 1: prepare for the DigDec decomposition of x from msb to lsb
     // Particularly, we construct from lsb to msb, then reverse it.
+    std::cout << "==========iDCF Gen==========" << std::endl;
     u8* real_idx = new u8[Bin];
     u8 level_and_res = 0;
     for (int i = 0; i < Bin; i++) {
@@ -50,28 +51,43 @@ iDCFKeyPack keyGeniDCF(int party_id, int Bin, int Bout,
     GroupElement* real_payload = new GroupElement[Bin];
     GroupElement* tmp_payload = new GroupElement[Bin];
     for (int i = 0; i < Bin; i++){
-        tmp_payload[i] = *payload;
+        tmp_payload[i] = GroupElement(payload->value, payload->bitsize);
+        real_payload[i].bitsize = Bout;
+        //multiplexer(party_id, &real_idx[i], &tmp_payload[i], &real_payload[i], Bin, peer);
     }
-    multiplexer(party_id, real_idx, tmp_payload, real_payload, Bin, peer);
+    //multiplexer(party_id, real_idx, tmp_payload, real_payload, Bin, peer);
+    for (int i = 0; i < Bin; i++){
+        std::cout<< "Prev Gen Payload Bitsize = " << real_payload[i].bitsize << std::endl;
+    }
+
+    insecure_multiplexer(party_id, real_idx, tmp_payload, real_payload, Bin, peer);
+
+    for (int i = 0; i < Bin; i++){
+        std::cout<< "Gen Payload Bitsize = " << real_payload[i].bitsize << std::endl;
+    }
 
     // Step 3. Invoke Key Gen of iDPF
     // Here we start from real_payload[1], to use beta 2 to beta n
-    DPFKeyPack idpf_key(keyGeniDPF(party_id, Bin - 1, payload->bitsize, real_idx, &(real_payload[1])),
-                        true);
+    DPFKeyPack idpf_key(keyGeniDPF(party_id, Bin - 1, payload->bitsize, real_idx,
+                                   &(real_payload[1]), true));
 
-    return {&idpf_key, &(real_payload[0])};
+    // Free space
+    delete[] tmp_payload;
+    delete[] real_idx;
+
+    return {idpf_key.Bin, idpf_key.Bout, idpf_key.groupSize, idpf_key.k, (const GroupElement*)idpf_key.g, idpf_key.v, &(real_payload[0])};
 }
 
 
 void evaliDCFNext(int party, uint64_t idx, block* st_s, u8* st_t, block* cw, u8* t_l, u8* t_r,
-                  GroupElement* W_cw, block* res_s, u8* res_t, GroupElement* y){
+                  const GroupElement W_cw, block* res_s, u8* res_t, GroupElement* y){
     // Input explanation:
     // st_s: current node
     // st_s: current control bit
     // cw: correction words
     // t_l t_r : tau
     // W: for convert
-
+    std:: cout << "In EvalNext, started bit size = " << W_cw.bitsize << "." << std::endl;
     osuCrypto::AES AESInstance;
 
     static const block notOneBlock = osuCrypto::toBlock(~0, ~1);
@@ -91,31 +107,58 @@ void evaliDCFNext(int party, uint64_t idx, block* st_s, u8* st_t, block* cw, u8*
         nextLevelSeedTemp = ct[idx];
         nextLevelControlBitTemp = lsb(ct[idx]);
     }
+    std:: cout << "In EvalNext, 2. bit size = " << W_cw.bitsize << "."<< std::endl;
 
     // Make conversion
     uint64_t W;
-    two_pc_convert(W_cw->bitsize, nextLevelSeedTemp, &W, res_s);
+
+    //W = 0;
+    //*res_s = osuCrypto::toBlock((u8)0);
+    two_pc_convert(y->bitsize, &nextLevelSeedTemp, &W, res_s);
+    std:: cout << "In EvalNext, 3. bit size = " << W_cw.bitsize << "."<< std::endl;
 
     // Transfer t
     *res_t = nextLevelControlBitTemp;
-    GroupElement sign = GroupElement(party==2?0:(-1), W_cw->bitsize);
-    *y = sign * (W + ((nextLevelControlBitTemp == (u8)1) ? *W_cw : 0));
+    GroupElement sign = GroupElement(party==2?0:(-1), W_cw.bitsize);
+    //GroupElement _W_cw(W_cw->value, W_cw->bitsize);
+    std::cout << "In EvalNext, original bit size = " << W_cw.bitsize << "."<< std::endl;
+    *y = sign * (W + ((nextLevelControlBitTemp == (u8)1) ?W_cw : 0));
+    std::cout << "In EvalNext, afterward bit size = " << W_cw.bitsize << "."<< std::endl;
 }
 
-void evaliDCF(int party, GroupElement *res, GroupElement idx, const iDCFKeyPack &key){
+void evaliDCF(int party, GroupElement *res, GroupElement idx, const iDCFKeyPack key){
 
     // DPF key structure:
     // k: Scw, 0 for root seed, loop start from 1
     // g: Wcw, mask term in Group, don't have to modify
     // v: Tcw, control bit correction, don't have to modify
+    std::cout << "==========iDCF Eval==========" << std::endl;
 
-    *res = (1 - idx[0]) * *(key.beta_0);
-    block st = key.idpf_key->k[0];
+    // Parse DCF Key
+    block st = key.k[0];
+    GroupElement beta_0 = *key.beta_0;
+    GroupElement* Wcw_list = new GroupElement[idx.bitsize - 1];
+    u8* tau_list = new u8[2 * (idx.bitsize - 1)];
+    block* CW_list = new block[idx.bitsize - 1];
+    for (int i = 0; i < idx.bitsize - 1; i++){
+        Wcw_list[i] = key.g[i];
+        tau_list[2 * i] = key.v[2 * i];
+        tau_list[2 * i + 1] = key.v[2 * i + 1];
+        CW_list[i] = key.k[i + 1];
+    }
+
+    // Perform Evaluation
+
+    *res = (1 - idx[0]) * beta_0;
     u8 t = (u8)(party - 2);
     GroupElement layerRes(0, res->bitsize);
+    block level_st = st;
+    u8 level_t = t;
     for(int i = 0; i < idx.bitsize - 1; i++){
-        evaliDCFNext(party, idx[i], &st, &t, &(key.idpf_key->k[i + 1]), &(key.idpf_key->v[i * 2]),
-                     &(key.idpf_key->v[i * 2 + 1]), &(key.idpf_key->g[i]), &st, &t, &layerRes);
+        evaliDCFNext(party, idx[i], &st, &t, &(CW_list[i]), &(tau_list[i * 2]),
+                     &(tau_list[i * 2 + 1]), Wcw_list[i], &level_st, &level_t, &layerRes);
+        st = level_st;
+        t = level_t;
         *res = *res + (1 - idx[i + 1] * layerRes);
     }
 }

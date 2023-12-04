@@ -29,6 +29,9 @@ void multiplexer2(int party_id, uint8_t *control_bit, GroupElement* dataA, Group
 void insecure_multiplexer2(int party_id, uint8_t *control_bit, GroupElement* dataA, GroupElement* dataB,
                            GroupElement* output, int32_t size, Peer* player);
 
+void insecure_multiplexer(int party_id, uint8_t *control_bit, GroupElement* dataA,
+                          GroupElement* output, int32_t size, Peer* player);
+
 void and_wrapper(int party_id, GroupElement* dataA, GroupElement* dataB, GroupElement* output, int32_t size,
                Peer* player) __attribute__((optimize("O0")));
 

@@ -57,9 +57,14 @@ struct DPFKeyPack{
 };
 
 struct iDCFKeyPack{
-    DPFKeyPack* idpf_key;
+    int Bin, Bout, groupSize;
+    block* k;
+    u8* v;
     GroupElement* beta_0;
-    iDCFKeyPack(DPFKeyPack* idpf_key, GroupElement* beta_0): idpf_key(idpf_key), beta_0(beta_0) {}
+    const GroupElement* g;
+    iDCFKeyPack(int Bin, int Bout, int groupSize,
+                block* k, const GroupElement* g, u8* v, GroupElement* beta_0): Bin(Bin), Bout(Bout), groupSize(groupSize),
+                k(k), g(g), v(v), beta_0(beta_0) {}
     iDCFKeyPack() {}
 };
 

@@ -655,7 +655,7 @@ void Peer::send_cot(GroupElement* data, GroupElement* output, int length, bool u
         otpack->iknp_straight->send_cot(_output, &(data->value), length, data->bitsize);
     }
     for (int i = 0; i < length; i++){
-        std::cout << "In send_cot, " << i << "th output for sender is " << _output[i]%(1ULL<<data->bitsize) << " with input " << data->value<< std::endl;
+        std::cout << "In send_cot, " << i << "th output for sender is " << _output[i]%(1ULL<<data->bitsize) << " with input " << data->value%(1ULL<<data->bitsize)<< std::endl;
         output[i].value = _output[i];
         output[i].bitsize = data->bitsize;
     }
@@ -681,7 +681,7 @@ void Peer::recv_cot(GroupElement* recv_arr, int size, uint8_t* sel, bool using_a
         otpack->iknp_straight->recv_cot(recv_value_arr, (bool*)sel, size, recv_arr[0].bitsize);
     }
     for (int i = 0; i < size; i++){
-        std::cout << "In recv_cot, " << i << "th output for receiver is " << recv_value_arr[i] %(16)<< std::endl;
+        std::cout << "In recv_cot, " << i << "th output for receiver is " << recv_value_arr[i] %(recv_arr[0].bitsize)<< std::endl;
         recv_arr[i].value = recv_value_arr[i];
     }
     numRounds += (otpack->iopack->io->num_rounds - pre_rounds);

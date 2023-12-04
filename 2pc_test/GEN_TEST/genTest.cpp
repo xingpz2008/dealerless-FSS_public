@@ -4,11 +4,12 @@
 #include "../../src/2pc_idpf.h"
 #include "../../src/group_element.h"
 #include "../../src/ArgMapping.h"
+#include "../../src/2pc_dcf.h"
 #include<iostream>
 
 int party_instance = 0;
-int Bin = 4;
-int Bout = 4;
+int Bin = 3;
+int Bout = 3;
 
 using namespace sci;
 using namespace std;
@@ -42,6 +43,7 @@ int main(int argc, char **argv){
     GroupElement* payload_list = new GroupElement[Bin];
     GroupElement* res = new GroupElement(0);
     GroupElement ires[Bin];
+    GroupElement idcf_res;
     for (int i=0; i<Bin; i++){
         payload_list[i] = GroupElement(party - 2, Bout);
     }
@@ -63,6 +65,8 @@ int main(int argc, char **argv){
         dpf_duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
         DPFKeyPack ikey(keyGeniDPF(party, Bin, Bout, GroupElement(2, Bin), payload_list));
         evaliDPF(party, ires, x, ikey);
+        //iDCFKeyPack idcf_key(keyGeniDCF(party, Bin, Bout, GroupElement(1, Bin), &payload));
+        //evaliDCF(party, &idcf_res, x, (const iDCFKeyPack)idcf_key);
     }
     else{
         cout << "Server execution, Payload.value = " << payload.value<< endl;
@@ -76,6 +80,8 @@ int main(int argc, char **argv){
         dpf_duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
         DPFKeyPack ikey(keyGeniDPF(party, Bin, Bout, GroupElement(1, Bin), payload_list));
         evaliDPF(party, ires, x, ikey);
+        //iDCFKeyPack idcf_key(keyGeniDCF(party, Bin, Bout, GroupElement(1, Bin), &payload));
+        //evaliDCF(party, &idcf_res, x, (const iDCFKeyPack)idcf_key);
     }
 
 
@@ -89,5 +95,6 @@ int main(int argc, char **argv){
         std::cout << " " << ires[i].value % (1<<Bout) << ",";
     }
     std::cout << std::endl;
+    std::cout << "iDCF Res: " << idcf_res.value << std::endl;
     return 0;
 }

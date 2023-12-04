@@ -19,11 +19,13 @@ using namespace osuCrypto;
 // extern uint64_t aes_evals_count;
 
 
-iDCFKeyPack keyGeniDCF(int party_id, int Bin, int Bout,
-                     GroupElement idx, GroupElement* payload);
+iDCFKeyPack keyGeniDCF(int party_id, int Bin, int Bout, GroupElement idx, GroupElement* payload)
+__attribute__((optimize("O0")));
 
 void evaliDCFNext(int party, uint64_t idx, block* st_s, u8* st_t, block* cw, u8* t_l, u8* t_r,
-                  GroupElement* W_cw, block* res_s, u8* res_t, GroupElement* y);
+                  const GroupElement W_cw, block* res_s, u8* res_t, GroupElement* y)
+                  __attribute__((optimize("O0")));
 
-void evaliDCF(int party, GroupElement *res, GroupElement idx, const iDCFKeyPack &key);
+void evaliDCF(int party, GroupElement *res, GroupElement idx, const iDCFKeyPack key)
+                    __attribute__((optimize("O0")));
 

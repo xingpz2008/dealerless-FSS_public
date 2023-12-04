@@ -74,13 +74,14 @@ void two_pc_convert(const int bitsize, const block &b, uint64_t *out)
     }
 }
 
-void two_pc_convert(const int bitsize, const block &b, uint64_t *out, block* out_s){
+void two_pc_convert(int bitsize, block *b, uint64_t *out, block* out_s){
     // Implementation of iDPF convert in Lightweight Techniques for Private Heavy Hitter
     const int bys = bytesize(bitsize);
     const int totalBys = bys;
 
     int numblocks = totalBys % 16 == 0 ? totalBys / 16 : (totalBys / 16) + 1;
-    AES aes(b);
+    const block _b = *b;
+    AES aes(_b);
     block pt[numblocks];
     block ct[numblocks];
     for(int i = 0; i < numblocks; i++) {
@@ -312,6 +313,12 @@ DPFKeyPack keyGenDPF(int party_id, int Bin, int Bout,
     reconstruct(W_CW);
     std::cout << "WCW = " << W_CW->value << std::endl;
 
+    //Free space
+    delete[] levelNodes;
+    delete[] nextLevelNodes;
+    delete[] nextLevelControlBits;
+    delete[] levelControlBits;
+
     // in DPF, swc is the seed for each level from root level, W_CW is to help convert output from Z_2 to Z_n
     return {Bin, Bout, 1, scw, W_CW, tau};
 }
@@ -319,14 +326,16 @@ DPFKeyPack keyGenDPF(int party_id, int Bin, int Bout,
 
 
 DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
-                     GroupElement idx, GroupElement* payload, bool call_from_DCF = false)
+                     GroupElement idx, GroupElement* payload, bool call_from_DCF)
 {
     // This is the 2pc generation of iDPF Key, proceed with multiple payload
+    std::cout << "==========iDPF Gen==========" << std::endl;
     static const block notOneBlock = osuCrypto::toBlock(~0, ~1);
     static const block notThreeBlock = osuCrypto::toBlock(~0, ~3);
     const static block pt[2] = {ZeroBlock, OneBlock};
 
     // Here we initialize the first block as the root node
+    prng.SetSeed(osuCrypto::toBlock(party_id, time(NULL)));
     auto s = prng.get<block>();
     // We maintain a list of seeds, which indicates the nodes on i-th level
     // We directly request the largest amount of storage, as 2^Bin,
@@ -350,6 +359,9 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
     // Variants for iDPF CW calculation
     uint64_t levelElements[lastLevelNodes];
     GroupElement W_CW[Bin];
+    for (int i = 0; i < Bin; i++){
+        W_CW[i].bitsize = Bout;
+    }
 
     // Step 0: prepare for the DigDec decomposition of x from msb to lsb
     // Particularly, we construct from lsb to msb, then reverse it.
@@ -450,7 +462,7 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
         uint64_t levelSum = 0;
         // We also need to add all Converted elements
         for (int j = 0; j < 2 * expandNum; j++){
-            two_pc_convert(Bout, levelNodes[j], &levelElements[j], &levelNodes[j]);
+            two_pc_convert(Bout, &levelNodes[j], &levelElements[j], &levelNodes[j]);
             levelSum = levelSum + levelElements[j];
             controlBitSum = controlBitSum + (uint64_t)levelControlBits[j];
         }
@@ -469,18 +481,27 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
         multiplexer2(party_id, &t, &W_CW_0, &W_CW_1, &W_CW[i], (int32_t)1, peer);
         reconstruct((int32_t)1, &W_CW[i], Bout);
     }
+
+    //Free space
+    delete[] levelNodes;
+    delete[] nextLevelNodes;
+    delete[] nextLevelControlBits;
+    delete[] levelControlBits;
+
     return {Bin, Bout, 1, scw, W_CW, tau};
 }
 
 DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
-                      u8* idx, GroupElement* payload, bool call_from_DCF = false)
+                      u8* idx, GroupElement* payload, bool call_from_DCF)
 {
+    std::cout << "==========iDPF Gen==========" << std::endl;
     // This is the 2pc generation of iDPF Key, proceed with multiple payload
     static const block notOneBlock = osuCrypto::toBlock(~0, ~1);
     static const block notThreeBlock = osuCrypto::toBlock(~0, ~3);
     const static block pt[2] = {ZeroBlock, OneBlock};
 
     // Here we initialize the first block as the root node
+    prng.SetSeed(osuCrypto::toBlock(party_id, time(NULL)));
     auto s = prng.get<block>();
     // We maintain a list of seeds, which indicates the nodes on i-th level
     // We directly request the largest amount of storage, as 2^Bin,
@@ -504,6 +525,10 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
     // Variants for iDPF CW calculation
     uint64_t levelElements[lastLevelNodes];
     GroupElement W_CW[Bin];
+
+    for (int i = 0; i < Bin; i++){
+        W_CW[i].bitsize = Bout;
+    }
 
     // Step 0: prepare for the DigDec decomposition of x from msb to lsb
     // Particularly, we construct from lsb to msb, then reverse it.
@@ -604,7 +629,7 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
         uint64_t levelSum = 0;
         // We also need to add all Converted elements
         for (int j = 0; j < 2 * expandNum; j++){
-            two_pc_convert(Bout, levelNodes[j], &levelElements[j], &levelNodes[j]);
+            two_pc_convert(Bout, &levelNodes[j], &levelElements[j], &levelNodes[j]);
             levelSum = levelSum + levelElements[j];
             controlBitSum = controlBitSum + (uint64_t)levelControlBits[j];
         }
@@ -620,9 +645,17 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
         GroupElement W_CW_1 = -payload[i] + levelSum * -sign;
 
         // TODO: Add mux2 here
+        std::cout <<"Payload Bit size = " << payload[i].bitsize << " W_CW_0 / 1 .bitsize = " << W_CW_0.bitsize << ", " << W_CW_1.bitsize << std::endl;
         multiplexer2(party_id, &t, &W_CW_0, &W_CW_1, &W_CW[i], (int32_t)1, peer);
         reconstruct((int32_t)1, &W_CW[i], Bout);
     }
+
+    //Free space
+    delete[] levelNodes;
+    delete[] nextLevelNodes;
+    delete[] nextLevelControlBits;
+    delete[] levelControlBits;
+
     return {Bin, Bout, 1, scw, W_CW, tau};
 }
 
@@ -737,7 +770,7 @@ void evaliDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &
         // At each stage, we make the convert from output in Z_2 to Z_n
         int sign = (party - 2) ? -1 : 1;
         // wrapper void two_pc_convert(const int bitsize, const block &b, uint64_t *out, block* out_s)
-        two_pc_convert(Bout, levelNodes, convert_res, &levelNodes);
+        two_pc_convert(Bout, &levelNodes, convert_res, &levelNodes);
         res[i] = (wcw[i] * (uint64_t) controlBit + *convert_res) * sign;
     }
     return;

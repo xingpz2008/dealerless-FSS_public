@@ -144,7 +144,7 @@ void multiplexer(int party_id, uint8_t *sel, GroupElement *dataA, GroupElement *
         localTemp[i] = (*sel == 0 ? GroupElement(0, dataA[i].bitsize): dataA[i]);
         localShares[i] = dataA[i] - localTemp[i] * 2;
         OTRes[i].bitsize = output[i].bitsize;
-        AnotherOTRes[size].bitsize = output[i].bitsize;
+        AnotherOTRes[i].bitsize = output[i].bitsize;
     }
     // OT wrapper :
     // void send_cot(uint64_t *data0, uint64_t *corr, int length, int l)
@@ -152,17 +152,17 @@ void multiplexer(int party_id, uint8_t *sel, GroupElement *dataA, GroupElement *
     switch(party_id){
         case 2:{
             for (int i=0; i < size; i++){
-                player->send_cot(&(localShares[i]), OTRes + i * sizeof(GroupElement), 1, false);
-                player->recv_cot(AnotherOTRes + i * sizeof(GroupElement), 1, sel, true);
-                std::cout << "The " << i << "th res, localS = " << localShares[i].value<<", OTR = " << OTRes[i].value % 16 << ", AR = " << AnotherOTRes[i].value % 16<<std::endl;
+                player->send_cot(&(localShares[i]), &OTRes[i], 1, true);
+                player->recv_cot(&AnotherOTRes[i], 1, sel, true);
+                std::cout << "The " << i << "th res, localS = " << localShares[i].value<<", OTR = " << OTRes[i].value % (1ULL << OTRes[i].bitsize) << ", AR = " << AnotherOTRes[i].value % (1ULL<<AnotherOTRes[i].bitsize)<<std::endl;
             }
             break;
         }
         case 3:{
             for (int i=0; i < size; i++){
-                player->recv_cot(OTRes + i * sizeof(GroupElement), 1, sel, false);
-                player->send_cot(&(localShares[i]), AnotherOTRes + i * sizeof(GroupElement), 1, true);
-                std::cout << "The " << i << "th res,  localS = " << localShares[i].value<<", OTR = " << OTRes[i].value%16 << ", AR = " << AnotherOTRes[i].value%16<<std::endl;
+                player->recv_cot(&OTRes[i], 1, sel, true);
+                player->send_cot(&(localShares[i]), &AnotherOTRes[i], 1, true);
+                std::cout << "The " << i << "th res,  localS = " << localShares[i].value<<", OTR = " << OTRes[i].value%((1ULL << OTRes[i].bitsize)) << ", AR = " << AnotherOTRes[i].value%((1ULL << AnotherOTRes[i].bitsize))<<std::endl;
             }
             break;
         }
@@ -290,6 +290,38 @@ void insecure_multiplexer2(int party_id, uint8_t *control_bit, GroupElement* dat
                 }
             }
             break;
+        }
+    }
+}
+
+void insecure_multiplexer(int party_id, uint8_t *control_bit, GroupElement* dataA,
+                          GroupElement* output, int32_t size, Peer* player){
+    switch (party_id) {
+        case 2:{
+            for (int i = 0; i < size; i++){
+                player->send_u8(control_bit[i]);
+                output[i] = GroupElement(8888, output[i].bitsize);
+                player->send_u64(dataA->value);
+            }
+            break;
+        }
+        case 3:{
+            u8 _ctrl[size];
+            uint64_t recvA[size];
+            for (int i = 0; i < size; i++){
+                _ctrl[i] = player->recv_u8();
+                _ctrl[i] = control_bit[i] ^ _ctrl[i];
+                recvA[i] = player->recv_u64();
+            }
+            for (int i = 0; i < size; i++) {
+                if (_ctrl[i] == (u8) 1) {
+                    output[i] = dataA[i] - 8888 + recvA[i];
+                }else{
+                    output[i] = GroupElement(-8888, output[i].bitsize);
+                }
+            }
+            break;
+            std::cout << std::endl;
         }
     }
 }
