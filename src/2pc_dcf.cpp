@@ -25,7 +25,7 @@ inline int bytesize(const int bitsize) {
 }
 
 iDCFKeyPack keyGeniDCF(int party_id, int Bin, int Bout,
-                      GroupElement idx, GroupElement* payload)
+                      GroupElement idx, GroupElement* payload, bool masked)
 {
     // This is the 2pc generation of DCF Key, proceed with multiple payload
     // The diff between DCF and iDPF is that:
@@ -36,9 +36,17 @@ iDCFKeyPack keyGeniDCF(int party_id, int Bin, int Bout,
 
     // Step 1: prepare for the DigDec decomposition of x from msb to lsb
     // Particularly, we construct from lsb to msb, then reverse it.
+    // For masked iDCF, we create mask in iDCF Gen func.
     std::cout << "==========iDCF Gen==========" << std::endl;
     u8* real_idx = new u8[Bin];
     u8 level_and_res = 0;
+    GroupElement* mask = new GroupElement(0, Bin);
+    if (masked){
+        prng.SetSeed(osuCrypto::toBlock(party_id, time(NULL)));
+        auto mask_s = prng.get<int>();
+        mask->value = mask_s;
+        idx = idx + *mask;
+    }
     for (int i = 0; i < Bin; i++) {
         real_idx[Bin - i - 1] = idx[Bin - i - 1] ^ level_and_res;
         std::cout << "Idx (from lsb) = " << (int) idx[Bin - i - 1] << std::endl;
@@ -75,7 +83,7 @@ iDCFKeyPack keyGeniDCF(int party_id, int Bin, int Bout,
     delete[] tmp_payload;
     delete[] real_idx;
 
-    return {idpf_key.Bin, idpf_key.Bout, idpf_key.groupSize, idpf_key.k, (const GroupElement*)idpf_key.g, idpf_key.v, &(real_payload[0])};
+    return {idpf_key.Bin, idpf_key.Bout, idpf_key.groupSize, idpf_key.k, (const GroupElement*)idpf_key.g, idpf_key.v, &(real_payload[0]), mask};
 }
 
 
@@ -126,7 +134,7 @@ void evaliDCFNext(int party, uint64_t idx, block* st_s, u8* st_t, block* cw, u8*
     std::cout << "In EvalNext, afterward bit size = " << W_cw.bitsize << "."<< std::endl;
 }
 
-void evaliDCF(int party, GroupElement *res, GroupElement idx, const iDCFKeyPack key){
+void evaliDCF(int party, GroupElement *res, GroupElement idx, const iDCFKeyPack key, bool masked){
 
     // DPF key structure:
     // k: Scw, 0 for root seed, loop start from 1
@@ -137,6 +145,11 @@ void evaliDCF(int party, GroupElement *res, GroupElement idx, const iDCFKeyPack 
     // Parse DCF Key
     block st = key.k[0];
     GroupElement beta_0 = *key.beta_0;
+    GroupElement mask = *key.random_mask;
+    if (masked){
+        idx = idx + mask;
+        reconstruct(1, &idx, idx.bitsize);
+    }
     GroupElement* Wcw_list = new GroupElement[idx.bitsize - 1];
     u8* tau_list = new u8[2 * (idx.bitsize - 1)];
     block* CW_list = new block[idx.bitsize - 1];
@@ -161,4 +174,7 @@ void evaliDCF(int party, GroupElement *res, GroupElement idx, const iDCFKeyPack 
         t = level_t;
         *res = *res + (1 - idx[i + 1] * layerRes);
     }
+    delete[] Wcw_list;
+    delete[] tau_list;
+    delete[] CW_list;
 }

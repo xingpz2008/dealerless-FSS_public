@@ -2,7 +2,7 @@
 // Created by root on 12/6/23.
 //
 
-#ifndef EZPC_2PC_API_H
-#define EZPC_2PC_API_H
+#include "2pc_idpf.h"
+#include "2pc_dcf.h"
 
-#endif //EZPC_2PC_API_H
+void modular_offline(int party_id, )

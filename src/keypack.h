@@ -51,8 +51,9 @@ struct DPFKeyPack{
     block* k;
     GroupElement* g;
     u8* v;
+    GroupElement* random_mask;
     DPFKeyPack(int Bin, int Bout, int groupSize,
-               block* k, GroupElement* g, u8* v): Bin(Bin), Bout(Bout), groupSize(groupSize), k(k), g(g), v(v){}
+               block* k, GroupElement* g, u8* v, GroupElement* random_mask): Bin(Bin), Bout(Bout), groupSize(groupSize), k(k), g(g), v(v), random_mask(random_mask){}
     DPFKeyPack() {}
 };
 
@@ -62,9 +63,10 @@ struct iDCFKeyPack{
     u8* v;
     GroupElement* beta_0;
     const GroupElement* g;
+    GroupElement* random_mask;
     iDCFKeyPack(int Bin, int Bout, int groupSize,
-                block* k, const GroupElement* g, u8* v, GroupElement* beta_0): Bin(Bin), Bout(Bout), groupSize(groupSize),
-                k(k), g(g), v(v), beta_0(beta_0) {}
+                block* k, const GroupElement* g, u8* v, GroupElement* beta_0, GroupElement* random_mask): Bin(Bin), Bout(Bout), groupSize(groupSize),
+                k(k), g(g), v(v), beta_0(beta_0), random_mask(random_mask) {}
     iDCFKeyPack() {}
 };
 

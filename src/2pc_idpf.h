@@ -32,13 +32,13 @@ inline u8 lsb(const block &b)
 void two_pc_convert(int bitsize, block *b, uint64_t *out, block* out_s) __attribute__((optimize("O0")));
 
 DPFKeyPack keyGenDPF(int party_id, int Bin, int Bout,
-                     GroupElement idx, GroupElement payload) __attribute__((optimize("O0")));
+                     GroupElement idx, GroupElement payload, bool masked = true) __attribute__((optimize("O0")));
 
 DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
-                      GroupElement idx, GroupElement* payload, bool call_from_DCF = false) __attribute__((optimize("O0")));
+                      GroupElement idx, GroupElement* payload, bool call_from_DCF = false, bool masked = true) __attribute__((optimize("O0")));
 
 DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
-                      u8* idx, GroupElement* payload, bool call_from_DCF = false) __attribute__((optimize("O0")));
+                      u8* idx, GroupElement* payload, bool call_from_DCF = false, bool masked = false) __attribute__((optimize("O0")));
 
-void evalDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &key) __attribute__((optimize("O0")));
-void evaliDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &key) __attribute__((optimize("O0")));
+void evalDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &key, bool masked = true) __attribute__((optimize("O0")));
+void evaliDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &key, bool masked = true) __attribute__((optimize("O0")));

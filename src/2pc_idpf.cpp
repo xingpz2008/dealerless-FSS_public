@@ -95,7 +95,7 @@ void two_pc_convert(int bitsize, block *b, uint64_t *out, block* out_s){
 
 
 DPFKeyPack keyGenDPF(int party_id, int Bin, int Bout,
-                     GroupElement idx, GroupElement payload)
+                     GroupElement idx, GroupElement payload, bool masked)
 {
     // Here payload should be the same bit length with b out
     static const block notOneBlock = osuCrypto::toBlock(~0, ~1);
@@ -123,6 +123,14 @@ DPFKeyPack keyGenDPF(int party_id, int Bin, int Bout,
     auto* scw = new block[Bin + 1];
     scw[0] = s[0];
     block sigma;
+
+    // Create mask
+    GroupElement* mask = new GroupElement(0, Bin);
+    if (masked){
+        auto mask_s = prng.get<int>();
+        mask->value = mask_s;
+        idx = idx + *mask;
+    }
 
     u8* real_idx = new u8[Bin];
     u8 level_and_res = 0;
@@ -320,13 +328,13 @@ DPFKeyPack keyGenDPF(int party_id, int Bin, int Bout,
     delete[] levelControlBits;
 
     // in DPF, swc is the seed for each level from root level, W_CW is to help convert output from Z_2 to Z_n
-    return {Bin, Bout, 1, scw, W_CW, tau};
+    return {Bin, Bout, 1, scw, W_CW, tau, mask};
 }
 
 
 
 DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
-                     GroupElement idx, GroupElement* payload, bool call_from_DCF)
+                     GroupElement idx, GroupElement* payload, bool call_from_DCF, bool masked)
 {
     // This is the 2pc generation of iDPF Key, proceed with multiple payload
     std::cout << "==========iDPF Gen==========" << std::endl;
@@ -361,6 +369,14 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
     GroupElement W_CW[Bin];
     for (int i = 0; i < Bin; i++){
         W_CW[i].bitsize = Bout;
+    }
+
+    // Preparing random mask
+    GroupElement* mask = new GroupElement(0, Bin);
+    if (masked){
+        auto mask_s = prng.get<int>();
+        mask->value = mask_s;
+        idx = idx + *mask;
     }
 
     // Step 0: prepare for the DigDec decomposition of x from msb to lsb
@@ -488,11 +504,11 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
     delete[] nextLevelControlBits;
     delete[] levelControlBits;
 
-    return {Bin, Bout, 1, scw, W_CW, tau};
+    return {Bin, Bout, 1, scw, W_CW, tau, mask};
 }
 
 DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
-                      u8* idx, GroupElement* payload, bool call_from_DCF)
+                      u8* idx, GroupElement* payload, bool call_from_DCF, bool masked)
 {
     std::cout << "==========iDPF Gen==========" << std::endl;
     // This is the 2pc generation of iDPF Key, proceed with multiple payload
@@ -529,6 +545,16 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
     for (int i = 0; i < Bin; i++){
         W_CW[i].bitsize = Bout;
     }
+
+    // Preparing random mask
+    GroupElement* mask = new GroupElement(0, Bin);
+    assert(masked == false);
+    /*
+    if (masked){
+        auto mask_s = prng.get<int>();
+        mask->value = mask_s;
+        idx = idx + *mask;
+    } */
 
     // Step 0: prepare for the DigDec decomposition of x from msb to lsb
     // Particularly, we construct from lsb to msb, then reverse it.
@@ -656,10 +682,10 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
     delete[] nextLevelControlBits;
     delete[] levelControlBits;
 
-    return {Bin, Bout, 1, scw, W_CW, tau};
+    return {Bin, Bout, 1, scw, W_CW, tau, mask};
 }
 
-void evalDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &key){
+void evalDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &key, bool masked){
     // Eval of 2pc-dpf
     // Initialize with the root node
     std::cout << "==========Eval==========" << std::endl;
@@ -673,6 +699,11 @@ void evalDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &k
     block* scw = key.k;
     GroupElement* wcw = key.g;
     u8* tau = key.v;
+    GroupElement mask = *key.random_mask;
+    if (masked){
+        idx = idx + mask;
+        reconstruct(1, &idx, idx.bitsize);
+    }
 
     // Prepare root node
     block levelNodes = scw[0];
@@ -728,7 +759,7 @@ void evalDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &k
     return;
 }
 
-void evaliDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &key){
+void evaliDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &key, bool masked){
     // Eval of 2pc-dpf
     // Initialize with the root node
     // The difference between dpf and idpf are to expand CW at each level
@@ -742,6 +773,11 @@ void evaliDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &
     block* scw = key.k;
     GroupElement* wcw = key.g;
     u8* tau = key.v;
+    GroupElement mask  = *key.random_mask;
+    if (masked){
+        idx = idx + mask;
+        reconstruct(1, &idx, idx.bitsize);
+    }
 
     // Prepare root node
     block levelNodes = scw[0];
@@ -775,4 +811,3 @@ void evaliDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &
     }
     return;
 }
-
