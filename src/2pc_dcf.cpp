@@ -79,11 +79,23 @@ iDCFKeyPack keyGeniDCF(int party_id, int Bin, int Bout,
     DPFKeyPack idpf_key(keyGeniDPF(party_id, Bin - 1, payload->bitsize, real_idx,
                                    &(real_payload[1]), true));
 
+    // Step 4. Generate Triples. We have to generate n beaver triplets.
+    GroupElement* a = new GroupElement[Bin];
+    GroupElement* b = new GroupElement[Bin];
+    GroupElement* c = new GroupElement[Bin];
+    for (int i = 0; i < Bin; i++){
+        a[i].bitsize = Bout;
+        b[i].bitsize = Bout;
+        c[i].bitsize = Bout;
+    }
+    // call beaver triplet generation
+    beaver_mult_offline(party_id, a, b, c, peer, Bin);
+
     // Free space
     delete[] tmp_payload;
     delete[] real_idx;
 
-    return {idpf_key.Bin, idpf_key.Bout, idpf_key.groupSize, idpf_key.k, (const GroupElement*)idpf_key.g, idpf_key.v, &(real_payload[0]), mask};
+    return {idpf_key.Bin, idpf_key.Bout, idpf_key.groupSize, idpf_key.k, idpf_key.g, idpf_key.v, &(real_payload[0]), mask, a, b, c};
 }
 
 
@@ -175,6 +187,62 @@ void evaliDCF(int party, GroupElement *res, GroupElement idx, const iDCFKeyPack 
         *res = *res + (1 - idx[i + 1] * layerRes);
     }
     delete[] Wcw_list;
+    delete[] tau_list;
+    delete[] CW_list;
+}
+
+void evaliDCF(int party, GroupElement *res, GroupElement idx, const iDCFKeyPack key){
+    // Implementation of 2pc masked DCF
+    int Bin = idx.bitsize;
+    block st = key.k[0];
+    GroupElement beta_0 = *key.beta_0;
+    GroupElement mask = *key.random_mask;
+    GroupElement masked_idx = idx + mask;
+    reconstruct(1, &masked_idx, idx.bitsize);
+    GroupElement Wcw_list[idx.bitsize - 1];
+    u8* tau_list = new u8[2 * (idx.bitsize - 1)];
+    block* CW_list = new block[idx.bitsize - 1];
+    for (int i = 0; i < idx.bitsize - 1; i++){
+        Wcw_list[i] = key.g[i];
+        tau_list[2 * i] = key.v[2 * i];
+        tau_list[2 * i + 1] = key.v[2 * i + 1];
+        CW_list[i] = key.k[i + 1];
+    }
+    GroupElement* a = key.a;
+    GroupElement* b = key.b;
+    GroupElement* c = key.c;
+
+    // Create 2 multiplication list
+    GroupElement multi_list_0[Bin];
+    GroupElement multi_list_1[Bin];
+    multi_list_0[0].value = (uint64_t)party - idx[0];
+    multi_list_0[0].bitsize = idx.bitsize;
+    multi_list_1[0] = beta_0;
+
+    // Perform Evaluation on public input x+r
+    // Here we directly perform evaluation, then batch multiplication
+    u8 t = (u8)(party - 2);
+    GroupElement layerRes(0, res->bitsize);
+    block level_st = st;
+    u8 level_t = t;
+    for(int i = 0; i < idx.bitsize - 1; i++){
+        evaliDCFNext(party, masked_idx[i], &st, &t, &(CW_list[i]), &(tau_list[i * 2]),
+                     &(tau_list[i * 2 + 1]), Wcw_list[i], &level_st, &level_t, &layerRes);
+        st = level_st;
+        t = level_t;
+        multi_list_0[i + 1].value = (uint64_t)party - idx[i+1];
+        multi_list_0[i + 1].bitsize = idx.bitsize;
+        multi_list_1[i+1] = layerRes;
+    }
+
+    // Perform multiplication
+    GroupElement multi_list_output[Bin];
+    beaver_mult_online(party, multi_list_0, multi_list_1, a, b, c, multi_list_output, Bin, peer);
+
+    for (int i = 0; i < Bin; i++){
+        *res = *res + multi_list_output[i];
+    }
+
     delete[] tau_list;
     delete[] CW_list;
 }

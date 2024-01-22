@@ -26,6 +26,11 @@ SOFTWARE.
 
 using namespace osuCrypto;
 
+struct MultKey{
+    int Bin, Bout;
+    GroupElement a, b, c;
+};
+
 struct DCFKeyPack{
     /*
      * Explanation on CryptFLow-style Key pack:
@@ -62,11 +67,14 @@ struct iDCFKeyPack{
     block* k;
     u8* v;
     GroupElement* beta_0;
-    const GroupElement* g;
+    GroupElement* g;
     GroupElement* random_mask;
+    GroupElement* a;
+    GroupElement* b;
+    GroupElement* c;
     iDCFKeyPack(int Bin, int Bout, int groupSize,
-                block* k, const GroupElement* g, u8* v, GroupElement* beta_0, GroupElement* random_mask): Bin(Bin), Bout(Bout), groupSize(groupSize),
-                k(k), g(g), v(v), beta_0(beta_0), random_mask(random_mask) {}
+                block* k, GroupElement* g, u8* v, GroupElement* beta_0, GroupElement* random_mask, GroupElement* a, GroupElement* b, GroupElement* c): Bin(Bin), Bout(Bout), groupSize(groupSize),
+                k(k), g(g), v(v), beta_0(beta_0), random_mask(random_mask), a(a), b(b), c(c) {}
     iDCFKeyPack() {}
 };
 
@@ -109,10 +117,6 @@ struct AddKey{
     GroupElement rb;
 };
 
-struct MultKey{
-    int Bin, Bout;
-    GroupElement a, b, c;
-};
 
 struct MatMulKey{
     int Bin, Bout;
@@ -316,3 +320,9 @@ inline void freeSplineKeyPair(std::pair<SplineKeyPack, SplineKeyPack> &keys)
     keys.first.beta_b.clear();
     keys.second.beta_b.clear();
 }
+
+struct ModularKeyPack{
+    int Bin, Bout;
+    int N;
+    iDCFKeyPack iDCFKey;
+};

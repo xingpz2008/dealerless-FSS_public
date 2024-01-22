@@ -540,7 +540,7 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
 
     // Variants for iDPF CW calculation
     uint64_t levelElements[lastLevelNodes];
-    GroupElement W_CW[Bin];
+    GroupElement* W_CW = new GroupElement[Bin];
 
     for (int i = 0; i < Bin; i++){
         W_CW[i].bitsize = Bout;
@@ -676,7 +676,7 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
         reconstruct((int32_t)1, &W_CW[i], Bout);
     }
 
-    //Free space
+    //Free space, W_CW not free
     delete[] levelNodes;
     delete[] nextLevelNodes;
     delete[] nextLevelControlBits;

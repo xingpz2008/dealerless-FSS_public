@@ -467,3 +467,91 @@ u8 check_bit_overflow(int party_id, u8 x_share, u8 r_prev_share, Peer* player){
     u8 rare = and_wrapper(party_id, x_share, r_prev_share, player);
     return or_wrapper(party_id, front, rare, player);
 }
+
+GroupElement cross_term_gen(int party_id, GroupElement* input, bool hold_arithmetic, Peer* player){
+    // This function uses COT for cross term generation
+    GroupElement cot_output;
+    GroupElement output = GroupElement(0, input->bitsize);
+    if(hold_arithmetic){
+        // Act as sender, send 2^i * a
+        for (int i = 0; i < input->bitsize; i++){
+            uint64_t constant = 1ULL << i;
+            GroupElement data_to_send = *input * constant;
+            player->send_cot(&data_to_send, &cot_output, 1, false);
+            output = output - cot_output;
+        }
+    }
+    else {
+        for (int i = 0; i < input->bitsize; i++) {
+            // Act as receiver, use lower bit as the choice bit
+            u8 choice_bit = (*input)[input->bitsize - 1 - i];
+            player->recv_cot(&cot_output, 1, &choice_bit, false);
+            output = output + cot_output;
+        }
+    }
+    return output;
+}
+
+void beaver_mult_offline(int party_id, GroupElement* a, GroupElement* b, GroupElement* c, Peer* player, int size = 1){
+    // This is the offline phase of beaver multiplication
+    // Here we have to invoke OT for generating cross-term c
+    // we also have to call rpg
+    srand((unsigned)time(NULL));
+    for (int i = 0; i < size; i++){
+        auto a_value = rand() % (1ULL << a[i].bitsize);
+        auto b_value = rand() % (1ULL << b[i].bitsize);
+        a[i].value = a_value;
+        b[i].value = b_value;
+
+        // Invoke OT for cross term generation
+        GroupElement localShareC = GroupElement(a_value*b_value, c[i].bitsize);
+        GroupElement shareC0 = GroupElement(0, c[i].bitsize);
+        GroupElement shareC1 = GroupElement(0, c[i].bitsize);
+        // Then we have to call 2 COTs
+        switch (party_id){
+            case 2:{
+                shareC0 = cross_term_gen(party_id, &a[i], true, player);
+                shareC1 = cross_term_gen(party_id, &b[i], true, player);
+                break;
+            }
+            case 3:{
+                shareC0 = cross_term_gen(party_id, &b[i], false, player);
+                shareC1 = cross_term_gen(party_id, &a[i], false, player);
+                break;
+            }
+            default:{
+                std::cout<<"Unsupported party! Current: "<< party_id <<std::endl;
+            }
+        }
+        c[i] = localShareC + shareC0 + shareC1;
+    }
+
+}
+
+void beaver_mult_online(int party_id, GroupElement input0, GroupElement input1,
+                        GroupElement a, GroupElement b, GroupElement c,
+                        GroupElement* output, Peer* player){
+    input0 = input0 - a;
+    input1 = input1 - b;
+    reconstruct(&input0);
+    reconstruct(&input1);
+    // Assume party_id \in {2, 3}
+    *output = c + b * input0 + a * input1 + input1 * input0 * (party_id - 2);
+}
+
+void beaver_mult_online(int party_id, GroupElement* input0, GroupElement* input1,
+                        GroupElement* a, GroupElement* b, GroupElement* c,
+                        GroupElement* output, int size, Peer* player){
+    // This is the batched output of beaver multiplication
+    for (int i = 0; i < size; i++){
+        input0[i] = input0[i] - a[i];
+        input1[i] = input1[i] - b[i];
+    }
+    // Here we call constant time reconstruction
+    reconstruct(size, input0, input0[0].bitsize);
+    reconstruct(size, input1, input1[0].bitsize);
+
+    for (int i = 0; i < size; i++){
+        output[i] = c[i] + b[i] * input0[i] + a[i] * input1[i] + input1[i] * input0[i] * (party_id - 2);
+    }
+}

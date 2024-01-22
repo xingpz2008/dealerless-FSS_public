@@ -170,7 +170,7 @@ void reconstruct(GroupElement* input){
     std::cout << "Rec recv : " << tmp.value << std::endl;
     *input = *input + tmp;
 
-    numRounds += 2;
+    numRounds += 1;
 }
 
 extern int num_threads;
