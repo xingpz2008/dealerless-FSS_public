@@ -326,3 +326,37 @@ struct ModularKeyPack{
     int N;
     iDCFKeyPack iDCFKey;
 };
+
+inline void freeModularKeyPack(ModularKeyPack key){
+    /*block* k;
+    u8* v;
+    GroupElement* beta_0;
+    GroupElement* g;
+    GroupElement* random_mask;
+    GroupElement* a;
+    GroupElement* b;
+    GroupElement* c;*/
+    delete[] key.iDCFKey.k;
+    delete[] key.iDCFKey.v;
+    delete[] key.iDCFKey.g;
+    delete[] key.iDCFKey.random_mask;
+    delete[] key.iDCFKey.a;
+    delete[] key.iDCFKey.b;
+    delete[] key.iDCFKey.c;
+}
+
+struct TRKeyPack{
+    int Bin, Bout;
+    int s;
+    iDCFKeyPack iDCFKey;
+};
+
+inline void freeTRKeyPack(TRKeyPack key){
+    delete[] key.iDCFKey.k;
+    delete[] key.iDCFKey.v;
+    delete[] key.iDCFKey.g;
+    delete[] key.iDCFKey.random_mask;
+    delete[] key.iDCFKey.a;
+    delete[] key.iDCFKey.b;
+    delete[] key.iDCFKey.c;
+}

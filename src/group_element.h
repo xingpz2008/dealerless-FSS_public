@@ -302,3 +302,11 @@ inline GroupElement operator>>(const GroupElement& a, const int& b)
     return c;
 }
 
+inline std::pair<GroupElement, GroupElement> segment(const GroupElement x, int lower_s){
+    GroupElement high(0, x.bitsize - lower_s);
+    GroupElement low(0, lower_s);
+    high.value = x.value >> lower_s;
+    low.value = x.value - (high.value << lower_s);
+    return std::make_pair(high, low);
+}
+
