@@ -14,3 +14,7 @@ GroupElement modular(int party_id, GroupElement input, int N, ModularKeyPack key
 TRKeyPack truncate_and_reduce_offline(int party_id, int l, int s);
 
 GroupElement truncate_and_reduce(int party_id, GroupElement input, int s, TRKeyPack key);
+
+ContainmentKeyPack containment_offline(int party_id, GroupElement* knots_list, int knots_size);
+
+void containment(int party_id, GroupElement input, GroupElement* output, int knots_size, ContainmentKeyPack key);

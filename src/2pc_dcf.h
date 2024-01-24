@@ -31,3 +31,4 @@ void evaliDCF(int party, GroupElement *res, GroupElement idx, const iDCFKeyPack 
 
 void evaliDCF(int party, GroupElement *res, GroupElement idx, const iDCFKeyPack key)__attribute__((optimize("O0")));
 
+void evaliDCF(int party, GroupElement* res, GroupElement* idx, iDCFKeyPack* keyList, int size, int max_bitsize)__attribute__((optimize("O0")));

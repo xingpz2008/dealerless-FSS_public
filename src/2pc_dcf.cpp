@@ -232,7 +232,7 @@ void evaliDCF(int party, GroupElement *res, GroupElement idx, const iDCFKeyPack 
         t = level_t;
         multi_list_0[i + 1].value = (uint64_t)party - idx[i+1];
         multi_list_0[i + 1].bitsize = idx.bitsize;
-        multi_list_1[i+1] = layerRes;
+        multi_list_1[i + 1] = layerRes;
     }
 
     // Perform multiplication
@@ -241,6 +241,88 @@ void evaliDCF(int party, GroupElement *res, GroupElement idx, const iDCFKeyPack 
 
     for (int i = 0; i < Bin; i++){
         *res = *res + multi_list_output[i];
+    }
+
+    delete[] tau_list;
+    delete[] CW_list;
+}
+
+void evaliDCF(int party, GroupElement* res, GroupElement* idx, iDCFKeyPack* keyList, int size, int max_bitsize){
+    // This is the batched implementation of masked DCF evaluation
+    int Bin[size];
+    block st[size];
+    GroupElement beta_0[size];
+    GroupElement mask[size];
+    GroupElement masked_idx[size];
+    GroupElement Wcw_list[size * (max_bitsize - 1)];
+    u8* tau_list = new u8[size * 2 * (max_bitsize - 1)];
+    block* CW_list = new block[size * (max_bitsize - 1)];
+    GroupElement a[size * max_bitsize];
+    GroupElement b[size * max_bitsize];
+    GroupElement c[size * max_bitsize];
+    GroupElement multi_list_0[max_bitsize * size];
+    GroupElement multi_list_1[max_bitsize * size];
+    u8 t[size];
+    GroupElement layerRes[size];
+    block level_st[size];
+    u8 level_t[size];
+    GroupElement multi_list_output[size * max_bitsize];
+
+    for (int i = 0; i < size; i++){
+        // Parse section
+        Bin[i] = idx[i].bitsize;
+        st[i] = keyList[i].k[0];
+        beta_0[i] = *(keyList[i].beta_0);
+        mask[i] = *(keyList[i].random_mask);
+        multi_list_0[0 + i * max_bitsize].value = (uint64_t)party - idx[i][0];
+        multi_list_0[0 + i * max_bitsize].bitsize = idx[i].bitsize;
+        multi_list_1[0 + i * max_bitsize] = beta_0[i];
+        layerRes[i] = GroupElement(0, res[i].bitsize);
+        level_st[i] = st[i];
+        t[i] = (u8)(party - 2);
+        level_t[i] = t[i];
+        for (int j = 0; j < idx[i].bitsize - 1; j++){
+            Wcw_list[j + i * (max_bitsize - 1)] = keyList[i].g[j];
+            tau_list[0 + 2 * j + i * (max_bitsize - 1)] = keyList[i].v[2 * j];
+            tau_list[1 + 2 * j + i * (max_bitsize - 1)] = keyList[i].v[2 * j + 1];
+            CW_list[j + i * (max_bitsize - 1)] = keyList[i].k[j + 1];
+        }
+        for (int j = 0; j < Bin[i]; j++){
+            a[j + i * max_bitsize] = keyList[i].a[j];
+            b[j + i * max_bitsize] = keyList[i].b[j];
+            c[j + i * max_bitsize] = keyList[i].c[j];
+        }
+        // Reconstruct masked input
+        masked_idx[i] = idx[i] + mask[i];
+    }
+
+    // Execute reconstruct, round ++, assume on max bitsize
+    reconstruct(size, masked_idx, max_bitsize);
+
+    // Execute batched DCF evaluation
+#pragma omp parallel for
+    for (int i = 0; i < size; i++){
+        for (int j = 0; j < idx[i].bitsize - 1; j++){
+            evaliDCFNext(party, idx[i][j], &(st[i]), &t[i], &(CW_list[j + i * (max_bitsize - 1)]),
+                         &(tau_list[0 + 2 * j + i * (max_bitsize - 1)]), &(tau_list[1 + 2 * j + i * (max_bitsize - 1)]),
+                         Wcw_list[j + i * (max_bitsize - 1)], &(level_st[i]), &(level_t[i]), &layerRes[i]);
+#pragma omp critical
+            {
+                st[i] = level_st[i];
+                t[i] = level_t[i];
+                multi_list_0[1 + j + i * max_bitsize].value = (uint64_t)party - idx[i][i + 1];
+                multi_list_0[1 + j + i * max_bitsize].bitsize = idx[i].bitsize;
+                multi_list_1[1 + j + i * max_bitsize] = layerRes[i];
+            }
+        }
+    }
+
+    beaver_mult_online(party, multi_list_0, multi_list_1, a, b, c, multi_list_output, size * max_bitsize, peer);
+
+    for (int i = 0; i < size; i++){
+        for (int j = 0; j < Bin[i]; j++){
+            res[i] = res[i] + multi_list_output[j + i * max_bitsize];
+        }
     }
 
     delete[] tau_list;

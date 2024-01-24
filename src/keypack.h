@@ -360,3 +360,16 @@ inline void freeTRKeyPack(TRKeyPack key){
     delete[] key.iDCFKey.b;
     delete[] key.iDCFKey.c;
 }
+
+struct ContainmentKeyPack{
+    int Bin, Bout;
+    int CtnNum;
+    GroupElement* AList;
+    GroupElement* BList;
+    GroupElement* CList;
+    iDCFKeyPack* iDCFKeyList;
+};
+
+inline void freeContainmentKeyPack(ContainmentKeyPack key){
+
+}
