@@ -322,8 +322,8 @@ inline void freeSplineKeyPair(std::pair<SplineKeyPack, SplineKeyPack> &keys)
 }
 
 struct ModularKeyPack{
+    // Remove int N component as N is shared
     int Bin, Bout;
-    int N;
     iDCFKeyPack iDCFKey;
 };
 
@@ -371,5 +371,31 @@ struct ContainmentKeyPack{
 };
 
 inline void freeContainmentKeyPack(ContainmentKeyPack key){
+    delete[] key.AList;
+    delete[] key.BList;
+    delete[] key.CList;
+    for (int i = 0; i < key.CtnNum; i++){
+        delete[] key.iDCFKeyList[i].k;
+        delete[] key.iDCFKeyList[i].v;
+        delete[] key.iDCFKeyList[i].g;
+        delete[] key.iDCFKeyList[i].random_mask;
+        delete[] key.iDCFKeyList[i].a;
+        delete[] key.iDCFKeyList[i].b;
+        delete[] key.iDCFKeyList[i].c;
+    }
+}
+
+struct DigDecKeyPack{
+    int Bin, Bout;
+    int SegNum;
+    int NewBitSize;
+    iDCFKeyPack iDCFKey;
+    DPFKeyPack DPFKey;
+    GroupElement* AList;
+    GroupElement* BList;
+    GroupElement* CList;
+};
+
+inline void freeDigDecKeyPack(DigDecKeyPack key){
 
 }

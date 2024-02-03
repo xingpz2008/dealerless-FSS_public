@@ -18,3 +18,7 @@ GroupElement truncate_and_reduce(int party_id, GroupElement input, int s, TRKeyP
 ContainmentKeyPack containment_offline(int party_id, GroupElement* knots_list, int knots_size);
 
 void containment(int party_id, GroupElement input, GroupElement* output, int knots_size, ContainmentKeyPack key);
+
+DigDecKeyPack digdec_offline(int party_id, int Bin, int NewBitSize);
+
+void digdec(int party_id, GroupElement input, int NewBitSize, DigDecKeyPack key);

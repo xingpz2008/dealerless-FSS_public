@@ -7,18 +7,18 @@
 ModularKeyPack modular_offline(int party_id, GroupElement N, GroupElement* res){
     // This is the offline function of modular
     // We need a secure comparison
+    // WARNING: This input N should be additive shared N
+    // WARNING: Shared payload!
     ModularKeyPack output;
-    GroupElement* one = new GroupElement(1, res->bitsize);
+    GroupElement* one = new GroupElement((uint64_t)(party_id - 2), res->bitsize);
     output.iDCFKey = keyGeniDCF(party_id, N.bitsize, res->bitsize, N, one);
     output.Bin = N.bitsize;
     output.Bout = res->bitsize;
-    output.N = N.value;
     delete one;
     return output;
 }
 
 GroupElement modular(int party_id, GroupElement input, int N, ModularKeyPack key){
-    assert(key.N == N);
     // Assume the input is no bigger than 2*N
     GroupElement* comparison_res = new GroupElement(-1, input.bitsize);
     evaliDCF(party_id, comparison_res, input, key.iDCFKey);
@@ -32,8 +32,8 @@ TRKeyPack truncate_and_reduce_offline(int party_id, int l, int s){
     output.Bin = s;
     output.Bout = l - s;
     output.s = s;
-    GroupElement two_power_s_minus_one((1ULL << s) - 1, s);
-    GroupElement* one = new GroupElement(1, output.Bout);
+    GroupElement two_power_s_minus_one((uint64_t)(party_id - 2) * ((1ULL << s) - 1), s);
+    GroupElement* one = new GroupElement((uint64_t)(party_id - 2), output.Bout);
     output.iDCFKey = keyGeniDCF(party_id, output.Bin + 1, output.Bout, two_power_s_minus_one, one);
     delete one;
     return output;
@@ -57,6 +57,7 @@ GroupElement truncate_and_reduce(int party_id, GroupElement input, int s, TRKeyP
 ContainmentKeyPack containment_offline(int party_id, GroupElement* knots_list, int knots_size){
     // In the implementation, we assume that there are two fixed knots on 0 and 2^s-1
     // knot list and knot size do not contain this, i.e. we actually have size+1 intervals
+    // WARNING: The input of knots list should be secret shared!
     ContainmentKeyPack output;
     output.Bin = knots_list[0].bitsize;
     output.Bout = output.Bin;
@@ -66,7 +67,7 @@ ContainmentKeyPack containment_offline(int party_id, GroupElement* knots_list, i
     output.iDCFKeyList = new iDCFKeyPack[knots_size];
     output.CtnNum = knots_size;
     beaver_mult_offline(party_id, output.AList, output.BList, output.CList, peer, knots_size - 1);
-    GroupElement* one = new GroupElement(0, output.Bout);
+    GroupElement* one = new GroupElement((uint64_t)(party_id - 2), output.Bout);
     for (int i = 0; i < knots_size; i++){
         output.iDCFKeyList[i] = keyGeniDCF(party_id, output.Bin, output.Bout, knots_list[i], one);
     }
@@ -104,4 +105,32 @@ void containment(int party_id, GroupElement input, GroupElement* output, int kno
     delete[] input_array;
     delete[] multA;
     delete[] multB;
+    freeContainmentKeyPack(key);
+}
+
+DigDecKeyPack digdec_offline(int party_id, int Bin, int NewBitSize){
+    DigDecKeyPack output;
+    int SegNum = Bin / NewBitSize + ((Bin % NewBitSize == 0) ? 0 : 1);
+    output.Bin = Bin;
+    output.NewBitSize = NewBitSize;
+    output.SegNum = SegNum;
+    // The number of DCF invocation is decided by SegNum
+    GroupElement two_power_s_minus_one = GroupElement((uint64_t)(party_id - 2) * ((1ULL << NewBitSize) - 1), NewBitSize);
+    GroupElement one = GroupElement((uint64_t)(party_id - 2), NewBitSize);
+    output.DPFKey = keyGenDPF(party_id, NewBitSize, NewBitSize, two_power_s_minus_one, one, true);
+    // For comparison input, we use n+1 bit
+    GroupElement two_power_s_minus_one_ = GroupElement((uint64_t)(party_id - 2) * ((1ULL << NewBitSize) - 1), NewBitSize + 1);
+    GroupElement* one_ = new GroupElement((uint64_t)(party_id - 2), NewBitSize);
+    output.iDCFKey = keyGeniDCF(party_id, NewBitSize + 1, NewBitSize, two_power_s_minus_one_, one_);
+    // Perform multiplication offline, we need segNum - 1 AND (replaced by arithmetic multiplication)
+    GroupElement* A = new GroupElement[SegNum - 1];
+    GroupElement* B = new GroupElement[SegNum - 1];
+    GroupElement* C = new GroupElement[SegNum - 1];
+    beaver_mult_offline(party_id, A, B, C, peer, SegNum - 1);
+    delete one_;
+    return output;
+}
+
+void digdec(int party_id, GroupElement input, int NewBitSize, DigDecKeyPack key){
+    
 }
