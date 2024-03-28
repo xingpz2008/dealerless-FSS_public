@@ -21,4 +21,4 @@ void containment(int party_id, GroupElement input, GroupElement* output, int kno
 
 DigDecKeyPack digdec_offline(int party_id, int Bin, int NewBitSize);
 
-void digdec(int party_id, GroupElement input, int NewBitSize, DigDecKeyPack key);
+void digdec(int party_id, GroupElement input, GroupElement* output, int NewBitSize, DigDecKeyPack key);

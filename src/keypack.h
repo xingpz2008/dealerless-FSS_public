@@ -389,13 +389,28 @@ struct DigDecKeyPack{
     int Bin, Bout;
     int SegNum;
     int NewBitSize;
-    iDCFKeyPack iDCFKey;
-    DPFKeyPack DPFKey;
+    iDCFKeyPack* iDCFKeyList;
+    DPFKeyPack* DPFKeyList;
     GroupElement* AList;
     GroupElement* BList;
     GroupElement* CList;
 };
 
 inline void freeDigDecKeyPack(DigDecKeyPack key){
-
+    delete[] key.AList;
+    delete[] key.BList;
+    delete[] key.CList;
+    for (int i = 0; i < key.SegNum; i++){
+        delete[] key.iDCFKeyList[i].k;
+        delete[] key.iDCFKeyList[i].v;
+        delete[] key.iDCFKeyList[i].g;
+        delete[] key.iDCFKeyList[i].random_mask;
+        delete[] key.iDCFKeyList[i].a;
+        delete[] key.iDCFKeyList[i].b;
+        delete[] key.iDCFKeyList[i].c;
+        delete[] key.DPFKeyList[i].k;
+        delete[] key.DPFKeyList[i].g;
+        delete[] key.DPFKeyList[i].v;
+        delete[] key.DPFKeyList[i].random_mask;
+    }
 }

@@ -756,6 +756,8 @@ void evalDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &k
     std::cout << "WCW = " << wcw[0].value << std::endl;
     res[0] = (wcw[0] * (uint64_t) controlBit + *convert_res) * sign;
 
+    delete convert_res;
+
     return;
 }
 
@@ -809,5 +811,70 @@ void evaliDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &
         two_pc_convert(Bout, &levelNodes, convert_res, &levelNodes);
         res[i] = (wcw[i] * (uint64_t) controlBit + *convert_res) * sign;
     }
+    return;
+}
+
+void evalDPF(int party, GroupElement *res, GroupElement *idx, DPFKeyPack *keyList, int size, int max_bitsize){
+    int Bin[size];
+    int Bout[size];
+    block* scw[size];
+    GroupElement* wcw[size];
+    u8* tau[size];
+    GroupElement mask[size];
+    block levelNodes[size];
+    u8 controlBit[size];
+    u8 level_tau[size];
+    static const block notOneBlock = osuCrypto::toBlock(~0, ~1);
+    static const block notThreeBlock = osuCrypto::toBlock(~0, ~3);
+    const static block pt[2] = {ZeroBlock, OneBlock};
+    // Maybe call ecbEncBlocks
+    osuCrypto::AES AESInstances[size];
+    block ct[2 * size];
+    block levelCW[size];
+    // Perform batched idx reconstruct
+    for (int i = 0; i < size; i++){
+        Bin[i] = idx[i].bitsize;
+        scw[i] = keyList[i].k;
+        wcw[i] = keyList[i].g;
+        tau[i] = keyList[i].v;
+        mask[i] = *(keyList[i].random_mask);
+        levelNodes[i] = scw[i][0];
+        controlBit[i] = (u8)(party - 2);
+        level_tau[i] = controlBit[i];
+        idx[i] = idx[i] + mask[i];
+        Bout[i] = keyList[i].Bout;
+    }
+    reconstruct(size, idx, max_bitsize);
+
+    for (int i = 0; i < max_bitsize; i++){
+        // We perform evaluation layer-wise
+#pragma omp parallel for
+        for (int j = 0; j < size; j++){
+#pragma omp critical
+            {
+                AESInstances[j].setKey(levelNodes[j]);
+                AESInstances[j].ecbEncTwoBlocks(pt, ct + 2 * i * sizeof(block));
+                levelCW[j] = scw[j][i + 1];
+                level_tau[j] = tau[j][2 * i + (int)(idx[j][i])];
+                if (controlBit[j] == (u8)1){
+                    levelNodes[j] = ct[2 * j + (int)(idx[j][i])] ^ levelCW[j];
+                    controlBit[j] = lsb(ct[2 * j + (int)(idx[j][i])]) ^ level_tau[j];
+                }else {
+                    levelNodes[j] = ct[2 * j + (int) (idx[j][i])];
+                    controlBit[j] = lsb(ct[2 * j + (int) (idx[j][i])]);
+                }
+            }
+        }
+    }
+
+
+    int sign = (party - 2) ? -1 : 1;
+    uint64_t convert_res[size];
+    for (int i = 0; i < size; i++){
+        two_pc_convert(Bout[i], levelNodes[i], &convert_res[i]);
+        //TODO: Check wcw here
+        res[i] = (wcw[i][0] * (uint64_t) controlBit[i] + convert_res[i]) * sign;
+    }
+
     return;
 }

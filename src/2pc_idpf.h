@@ -42,3 +42,6 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
 
 void evalDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &key, bool masked = true) __attribute__((optimize("O0")));
 void evaliDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &key, bool masked = true) __attribute__((optimize("O0")));
+
+// Batched evaluation with constant rounds, masked
+void evalDPF(int party, GroupElement *res, GroupElement *idx, DPFKeyPack *keyList, int size, int max_bitsize) __attribute__((optimize("O0")));
