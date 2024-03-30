@@ -364,9 +364,13 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
     block* scw = new block[Bin + 1];
     scw[0] = s;
 
+    GroupElement W_CW_0[Bin];
+    GroupElement W_CW_1[Bin];
+    u8 t[Bin];
+
     // Variants for iDPF CW calculation
     uint64_t levelElements[lastLevelNodes];
-    GroupElement W_CW[Bin];
+    GroupElement* W_CW = new GroupElement[Bin];
     for (int i = 0; i < Bin; i++){
         W_CW[i].bitsize = Bout;
     }
@@ -487,16 +491,16 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
         u8 cmp_tau_1 = (u8)((controlBitSum >> 1) & 1);
         // Calculate [t]
         // TODO: ADD F_AND here, Correct?
-        u8 t = cmp_2bit(party_id, cmp_tau_1, cmp_tau_0, peer);
+        t[i] = cmp_2bit(party_id, cmp_tau_1, cmp_tau_0, peer);
         GroupElement sign(((party_id-2) == 1) ? 1 : -1, Bout);
         // Sign = -1 for p1, 1 for p0
-        GroupElement W_CW_0 = payload[i] + levelSum * sign;
-        GroupElement W_CW_1 = -payload[i] + levelSum * -sign;
+        W_CW_0[i] = payload[i] + levelSum * sign;
+        W_CW_1[i] = -payload[i] + levelSum * -sign;
 
         // TODO: Add mux2 here
-        multiplexer2(party_id, &t, &W_CW_0, &W_CW_1, &W_CW[i], (int32_t)1, peer);
-        reconstruct((int32_t)1, &W_CW[i], Bout);
     }
+    multiplexer2(party_id, t, W_CW_0, W_CW_1, W_CW, (int32_t)Bin, peer);
+    reconstruct((int32_t)Bin, W_CW, Bout);
 
     //Free space
     delete[] levelNodes;
@@ -537,6 +541,9 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
     u8* tau = new u8[Bin * 2];
     block* scw = new block[Bin + 1];
     scw[0] = s;
+    GroupElement W_CW_0[Bin];
+    GroupElement W_CW_1[Bin];
+    u8 t[Bin];
 
     // Variants for iDPF CW calculation
     uint64_t levelElements[lastLevelNodes];
@@ -664,17 +671,15 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
         u8 cmp_tau_1 = (u8)((controlBitSum >> 1) & 1);
         // Calculate [t]
         // TODO: ADD F_AND here, Correct?
-        u8 t = cmp_2bit(party_id, cmp_tau_1, cmp_tau_0, peer);
+        t[i] = cmp_2bit(party_id, cmp_tau_1, cmp_tau_0, peer);
         GroupElement sign(((party_id-2) == 1) ? 1 : -1, Bout);
         // Sign = -1 for p1, 1 for p0
-        GroupElement W_CW_0 = payload[i] + levelSum * sign;
-        GroupElement W_CW_1 = -payload[i] + levelSum * -sign;
+        W_CW_0[i] = payload[i] + levelSum * sign;
+        W_CW_1[i] = -payload[i] + levelSum * -sign;
 
-        // TODO: Add mux2 here
-        std::cout <<"Payload Bit size = " << payload[i].bitsize << " W_CW_0 / 1 .bitsize = " << W_CW_0.bitsize << ", " << W_CW_1.bitsize << std::endl;
-        multiplexer2(party_id, &t, &W_CW_0, &W_CW_1, &W_CW[i], (int32_t)1, peer);
-        reconstruct((int32_t)1, &W_CW[i], Bout);
     }
+    multiplexer2(party_id, t, W_CW_0, W_CW_1, W_CW, (int32_t)Bin, peer);
+    reconstruct((int32_t)Bin, W_CW, Bout);
 
     //Free space, W_CW not free
     delete[] levelNodes;
@@ -811,6 +816,7 @@ void evaliDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &
         two_pc_convert(Bout, &levelNodes, convert_res, &levelNodes);
         res[i] = (wcw[i] * (uint64_t) controlBit + *convert_res) * sign;
     }
+    delete convert_res;
     return;
 }
 

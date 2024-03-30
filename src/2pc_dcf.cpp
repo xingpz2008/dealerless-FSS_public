@@ -68,6 +68,7 @@ iDCFKeyPack keyGeniDCF(int party_id, int Bin, int Bout,
         std::cout<< "Prev Gen Payload Bitsize = " << real_payload[i].bitsize << std::endl;
     }
 
+    // TODO: Replace insecure wrapper with real protocol
     insecure_multiplexer(party_id, real_idx, tmp_payload, real_payload, Bin, peer);
 
     for (int i = 0; i < Bin; i++){

@@ -52,6 +52,8 @@ u8 check_bit_overflow(int party_id, u8 x_share, u8 r_prev_share, Peer* player);
 
 GroupElement cross_term_gen(int party_id, GroupElement* input, bool hold_arithmetic, Peer* player);
 
+void cross_term_gen(int party_id, GroupElement* input, GroupElement* output, bool hold_arithmetic, int size, Peer* player);
+
 void beaver_mult_offline(int party_id, GroupElement* a, GroupElement* b, GroupElement* c, Peer* player, int size);
 
 void beaver_mult_online(int party_id, GroupElement input0, GroupElement input1,

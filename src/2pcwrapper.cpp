@@ -246,13 +246,14 @@ void multiplexer2(int party_id, uint8_t* control_bit, osuCrypto::block* dataA, o
 void multiplexer2(int party_id, uint8_t *control_bit, GroupElement* dataA, GroupElement* dataB,
                   GroupElement* output, int32_t size, Peer* player){
     GroupElement a_minus_b[size];
+    uint8_t real_sel[size];
 
     for (int i=0; i<size; i++){
         a_minus_b[i] = dataA[i] - dataB[i];
+        real_sel[i] = control_bit[i] ^((u8)party_id-2);
     }
 
-    uint8_t real_sel = *control_bit ^((u8)party_id-2);
-    multiplexer(party_id, &real_sel, a_minus_b, output, size, player);
+    multiplexer(party_id, real_sel, a_minus_b, output, size, player);
 
     for (int i=0; i<size; i++){
         output[i] = output[i] + dataB[i];
@@ -470,6 +471,7 @@ u8 check_bit_overflow(int party_id, u8 x_share, u8 r_prev_share, Peer* player){
 
 GroupElement cross_term_gen(int party_id, GroupElement* input, bool hold_arithmetic, Peer* player){
     // This function uses COT for cross term generation
+    // TODO: Add batched operation
     GroupElement cot_output;
     GroupElement output = GroupElement(0, input->bitsize);
     if(hold_arithmetic){
@@ -492,40 +494,98 @@ GroupElement cross_term_gen(int party_id, GroupElement* input, bool hold_arithme
     return output;
 }
 
+void cross_term_gen(int party_id, GroupElement* input, GroupElement* output, bool hold_arithmetic, int size, Peer* player){
+    // This is the batched operation of cross term generation.
+    // We assume that only one party holds the arithmetic with uniform bit length.
+    int iteration_size = input[0].bitsize * size;
+    int iteration_flag = 0;
+    GroupElement cot_output[iteration_size];
+    if (hold_arithmetic){
+        uint64_t constant;
+        GroupElement data_to_send[iteration_size];
+        for (int i = 0; i < size; i++){
+            constant = 1ULL << i;
+            for (int j = 0; j < input[i].bitsize; j++){
+                data_to_send[iteration_flag] = input[i] * constant;
+                iteration_flag++;
+            }
+        }
+        // Call one round COT
+        iteration_flag = 0;
+        player->send_cot(data_to_send, cot_output, iteration_size, false);
+        for (int i = 0; i < size; i++){
+            output[i] = output[i] - cot_output[iteration_flag];
+            iteration_flag++;
+        }
+    }else{
+        u8 choice_bit[iteration_size];
+        for (int i = 0; i < size; i++){
+            for(int j = 0; j < input[i].bitsize; j++){
+                choice_bit[iteration_flag] = input[i][input[i].bitsize - 1 - j];
+                iteration_flag++;
+            }
+            // Call One round COT
+            player->recv_cot(cot_output, iteration_size, choice_bit, false);
+            iteration_flag = 0;
+            for (int i = 0; i < size; i++){
+                output[i] = output[i] + cot_output[iteration_flag];
+                iteration_flag++;
+            }
+        }
+    }
+    return;
+}
+
 void beaver_mult_offline(int party_id, GroupElement* a, GroupElement* b, GroupElement* c, Peer* player, int size = 1){
     // This is the offline phase of beaver multiplication
     // Here we have to invoke OT for generating cross-term c
     // we also have to call rpg
+    // This function is optimized with batch operation
     srand((unsigned)time(NULL));
-    for (int i = 0; i < size; i++){
+    // GroupElement shareC0[size];
+    // GroupElement shareC1[size];
+    GroupElement* OTshareC = new GroupElement[2 * size];
+    GroupElement* OTinputAB = new GroupElement[2 * size];
+    GroupElement localShareC[size];
+    for (int i = 0; i < size; i++) {
         auto a_value = rand() % (1ULL << a[i].bitsize);
         auto b_value = rand() % (1ULL << b[i].bitsize);
         a[i].value = a_value;
         b[i].value = b_value;
 
         // Invoke OT for cross term generation
-        GroupElement localShareC = GroupElement(a_value*b_value, c[i].bitsize);
-        GroupElement shareC0 = GroupElement(0, c[i].bitsize);
-        GroupElement shareC1 = GroupElement(0, c[i].bitsize);
-        // Then we have to call 2 COTs
-        switch (party_id){
-            case 2:{
-                shareC0 = cross_term_gen(party_id, &a[i], true, player);
-                shareC1 = cross_term_gen(party_id, &b[i], true, player);
-                break;
-            }
-            case 3:{
-                shareC0 = cross_term_gen(party_id, &b[i], false, player);
-                shareC1 = cross_term_gen(party_id, &a[i], false, player);
-                break;
-            }
-            default:{
-                std::cout<<"Unsupported party! Current: "<< party_id <<std::endl;
-            }
-        }
-        c[i] = localShareC + shareC0 + shareC1;
+        localShareC[i] = GroupElement(a_value * b_value, c[i].bitsize);
+        // shareC0[i] = GroupElement(0, c[i].bitsize);
+        // shareC1[i] = GroupElement(0, c[i].bitsize);
+        OTshareC[2 * i] = GroupElement(0, c[i].bitsize);
+        OTshareC[2 * i + 1] = GroupElement(0, c[i].bitsize);
+        OTinputAB[i] = a[i];
+        OTinputAB[i + size] = b[i];
     }
-
+    // Then we have to call 2 COTs
+    switch (party_id){
+        case 2:{
+            cross_term_gen(party_id, OTinputAB, OTshareC, true, 2 * size, player);
+            //shareC0 = cross_term_gen(party_id, &a[i], true, player);
+            //shareC1 = cross_term_gen(party_id, &b[i], true, player);
+            break;
+        }
+        case 3:{
+            cross_term_gen(party_id, OTinputAB, OTshareC, false, 2 * size, player);
+            //shareC0 = cross_term_gen(party_id, &b[i], false, player);
+            //shareC1 = cross_term_gen(party_id, &a[i], false, player);
+            break;
+        }
+        default:{
+            std::cout<<"Unsupported party! Current: "<< party_id <<std::endl;
+        }
+    }
+    for (int i = 0; i < size; i++){
+        c[i] = localShareC[i] + OTshareC[i] + OTshareC[i + size];
+    }
+    //c[i] = localShareC + shareC0 + shareC1;
+    delete[] OTshareC;
+    delete[] OTinputAB;
 }
 
 void beaver_mult_online(int party_id, GroupElement input0, GroupElement input1,
