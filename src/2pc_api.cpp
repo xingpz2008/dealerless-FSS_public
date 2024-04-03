@@ -23,7 +23,9 @@ GroupElement modular(int party_id, GroupElement input, int N, ModularKeyPack key
     GroupElement* comparison_res = new GroupElement(-1, input.bitsize);
     evaliDCF(party_id, comparison_res, input, key.iDCFKey);
     freeModularKeyPack(key);
-    return input - *comparison_res * N;
+    GroupElement output = input - (GroupElement(uint64_t(party_id - 2), input.bitsize) - *comparison_res) * N;
+    delete comparison_res;
+    return output;
 }
 
 TRKeyPack truncate_and_reduce_offline(int party_id, int l, int s){
