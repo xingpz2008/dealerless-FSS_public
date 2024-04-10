@@ -45,3 +45,5 @@ void evaliDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &
 
 // Batched evaluation with constant rounds, masked
 void evalDPF(int party, GroupElement *res, GroupElement *idx, DPFKeyPack *keyList, int size, int max_bitsize) __attribute__((optimize("O0")));
+
+void evalAll(int party, GroupElement* res, DPFKeyPack key, int length) __attribute__((optimize("O0")));

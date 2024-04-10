@@ -884,3 +884,72 @@ void evalDPF(int party, GroupElement *res, GroupElement *idx, DPFKeyPack *keyLis
 
     return;
 }
+
+void evalAll(int party, GroupElement* res, DPFKeyPack key, int length){
+    // This is the implementation of all domain evaluation for evalAll
+    // The optimization is that we do not have to compute the same PRG twice
+    GroupElement mask = *(key.random_mask);
+    // We first allocate memory for PRG dict, that is 2^n+1 - 1
+    int blockNum = (1 << (length + 1)) - 1;
+    block* dict[blockNum];
+    for (int i = 0; i < blockNum; i++){
+        dict[i] = NULL;
+    }
+    int evalNum = 1 << length;
+
+    // Parse from key
+    GroupElement real_input(0, length);
+    block* scw = key.k;
+    GroupElement* wcw = key.g;
+    u8* tau = key.v;
+    block levelNodes;
+    u8 controlBit;
+    u8 level_tau;
+    static const block notOneBlock = osuCrypto::toBlock(~0, ~1);
+    static const block notThreeBlock = osuCrypto::toBlock(~0, ~3);
+    const static block pt[2] = {ZeroBlock, OneBlock};
+    block ct[2];
+    osuCrypto::AES AESInstance;
+    int Bin = key.Bin;
+    int Bout = key.Bout;
+    int dict_iterator;
+    int sign = (party - 2) ? -1 : 1;
+    uint64_t* convert_res = new uint64_t;
+
+    for (int i = 0; i < evalNum; i++){
+        levelNodes = scw[0];
+        controlBit = (u8)(party - 2);
+        level_tau = controlBit;
+        real_input = i + mask;
+        dict_iterator = 0;
+        for (int j = 0; j < Bin; j++){
+            dict_iterator += (real_input[j] << j);
+            if (dict[dict_iterator] == NULL){
+                AESInstance.setKey(levelNodes);
+                AESInstance.ecbEncTwoBlocks(pt, ct);
+                dict[dict_iterator] = new block[2];
+                dict[dict_iterator][0] = ct[0];
+                dict[dict_iterator][1] = ct[1];
+            }else{
+                ct[0] = dict[dict_iterator][0];
+                ct[1] = dict[dict_iterator][1];
+            }
+            block levelCW = scw[j + 1];
+            level_tau = tau[2 * j + (int)(real_input[j])];
+            if (controlBit == (u8)1){
+                levelNodes = ct[(int)(real_input[j])] ^  levelCW;
+                controlBit = lsb(ct[(int)(real_input[j])]) ^ level_tau;
+            }else{
+                levelNodes = ct[(int)(real_input[j])];
+                controlBit = lsb(ct[(int)(real_input[j])]);
+            }
+        }
+        two_pc_convert(Bout, levelNodes, convert_res);
+        res[i] = (wcw[0] * (uint64_t) controlBit + *convert_res) * sign;
+    }
+    // Free all space
+    for (int i = 0; i < blockNum; i++){
+        delete[] dict[i];
+    }
+    delete convert_res;
+}

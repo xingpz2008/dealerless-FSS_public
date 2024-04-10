@@ -133,9 +133,15 @@ DigDecKeyPack digdec_offline(int party_id, int Bin, int NewBitSize){
         output.iDCFKeyList[i] = keyGeniDCF(party_id, NewBitSize + 1, NewBitSize, two_power_s_minus_one_, one_);
     }
     // Perform multiplication offline, we need segNum - 1 AND (replaced by arithmetic multiplication)
+    // Beaver triplet should be new bitsize bit.
     GroupElement* A = new GroupElement[SegNum - 1];
     GroupElement* B = new GroupElement[SegNum - 1];
     GroupElement* C = new GroupElement[SegNum - 1];
+    for (int i = 0; i < SegNum - 1; i++){
+        A[i].bitsize = NewBitSize;
+        B[i].bitsize = NewBitSize;
+        C[i].bitsize = NewBitSize;
+    }
     beaver_mult_offline(party_id, A, B, C, peer, SegNum - 1);
     delete one_;
     return output;
