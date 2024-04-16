@@ -414,3 +414,15 @@ inline void freeDigDecKeyPack(DigDecKeyPack key){
         delete[] key.DPFKeyList[i].random_mask;
     }
 }
+
+struct SplinePolyApproxKeyPack{
+    int Bin, Bout;
+    int degNum, segNum;
+    GroupElement* coefficientList;
+    GroupElement* random_mask;
+};
+
+inline void freeSplinePolyApproxKeyPack(SplinePolyApproxKeyPack key){
+    delete[] key.coefficientList;
+    delete[] key.random_mask;
+}

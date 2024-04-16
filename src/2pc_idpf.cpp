@@ -920,7 +920,8 @@ void evalAll(int party, GroupElement* res, DPFKeyPack key, int length){
         levelNodes = scw[0];
         controlBit = (u8)(party - 2);
         level_tau = controlBit;
-        real_input = i + mask;
+        // Considering the usage in our work, we do not need the real input to add mask
+        real_input = i;
         dict_iterator = 0;
         for (int j = 0; j < Bin; j++){
             dict_iterator += (real_input[j] << j);

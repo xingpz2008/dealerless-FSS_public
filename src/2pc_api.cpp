@@ -212,3 +212,168 @@ void digdec(int party_id, GroupElement input, GroupElement* output, int NewBitSi
     delete[] v;
     return;
 }
+
+DPFKeyPack lut_offline(int party_id, int table_size, int idx_bitlen, int lut_bitlen){
+    // Offline stage of lut functionality
+    prng.SetSeed(osuCrypto::toBlock(party_id, time(NULL)));
+    auto s = prng.get<int>();
+    GroupElement* lut_index_shared = new GroupElement(s, idx_bitlen);
+    GroupElement one(party_id - 2, lut_bitlen);
+    DPFKeyPack output = keyGenDPF(party_id, idx_bitlen, lut_bitlen, *(lut_index_shared), one, false);
+    // Parse random info into it.
+    output.random_mask = lut_index_shared;
+    return output;
+}
+
+GroupElement lut(int party_id, GroupElement input, GroupElement* table, int table_size, int output_bitlen, DPFKeyPack key){
+    // This is the implementation of DPF based public lookup table protocol
+    // This considers a masked input, i.e. x=c -> x+r=c+r
+    // However, we do not have to reconstruct input at first. We perform the DPF evaluation at place r.
+    GroupElement output(0, output_bitlen);
+
+    // Perform evalAll
+    GroupElement* full_domain_res = new GroupElement[table_size];
+    GroupElement* shifted_full_domain_res = new GroupElement[table_size];
+    for(int i = 0; i < table_size; i++){
+        // Init res bit size
+        full_domain_res[i].bitsize = table[i].bitsize;
+    }
+    int full_domain_length = (int)log2ceil(table_size);
+    evalAll(party_id, full_domain_res, key, full_domain_length);
+
+    // Then process the shift of the vector.
+    // reconstruct input - r, parse random index.
+    GroupElement key_index = *(key.random_mask);
+    GroupElement shift_amount = input - key_index;
+    reconstruct(&shift_amount);
+    GroupElement negative_point(1ULL << (shift_amount.bitsize - 1), shift_amount.bitsize);
+
+    // if bigger, then it is negative, causing ---x---r----, i.e. vector to left
+    bool left_flag = (shift_amount > negative_point);
+    GroupElement abs_val = left_flag ? shift_amount :
+            GroupElement((1ULL << shift_amount.bitsize) - shift_amount.value, shift_amount.bitsize);
+    mod(abs_val);
+    for (int i = 0; i < table_size; i++){
+        int real_vector_idx = (i + abs_val.value * (2 * (int)left_flag - 1)) % (1ULL << table_size);
+        shifted_full_domain_res[i] = full_domain_res[real_vector_idx];
+        // Perform multiplication on local table
+        output = output + shifted_full_domain_res[i] * table[i];
+    }
+
+    delete[] full_domain_res;
+    delete[] shifted_full_domain_res;
+    delete[] key.k;
+    delete[] key.g;
+    delete[] key.v;
+    delete[] key.random_mask;
+    return output;
+}
+
+SplinePolyApproxKeyPack spline_poly_approx_offline(int party_id, int Bin, int Bout,
+                                                   GroupElement* publicCoefficientList, int degree, int segNum){
+    // Offline generation of spline polynomial approximation
+    // The input of publicCoefficient should be a, b, c for each interval (assume 2-degree)
+    SplinePolyApproxKeyPack output;
+    output.Bin = Bin;
+    output.Bout = Bout;
+    output.degNum = degree;
+    output.segNum = segNum;
+    switch (degree) {
+        case 2:{
+            // For two-degree polynomial, we have three coefficient ax2+bx+c -> ax2+(b-2ar)x+c+r2
+            // The output coefficient list is stored as follows: aaaaabbbbbccccc
+            GroupElement* coefficientList = new GroupElement[3 * segNum];
+            GroupElement* random_mask = new GroupElement[segNum];
+            prng.SetSeed(osuCrypto::toBlock(party_id, time(NULL)));
+            for (int i = 0; i < segNum; i++){
+                random_mask[i] = GroupElement(prng.get<uint64_t>(), Bin);
+                // create a:
+                // Converting into shares
+                coefficientList[i] = publicCoefficientList[i] * (uint64_t)(party_id - 2);
+            }
+            // create b:
+            // There should be a multiplication with a and r, here we need 2 * seg MTs in all
+            GroupElement* tmpA = new GroupElement[2 * segNum];
+            GroupElement* tmpB = new GroupElement[2 * segNum];
+            GroupElement* tmpC = new GroupElement[2 * segNum];
+            GroupElement* mulA = new GroupElement[2 * segNum];
+            GroupElement* mulB = new GroupElement[2 * segNum];
+            GroupElement* mulRes = new GroupElement[2 * segNum];
+            for (int j = 0; j < 2 * segNum; j++){
+                tmpA[j].bitsize = Bin;
+                tmpB[j].bitsize = Bin;
+                tmpC[j].bitsize = Bin;
+                if (j < segNum){
+                    mulA[j] = coefficientList[j];
+                    mulB[j] = random_mask[j];
+                }else{
+                    mulA[j] = random_mask[j - segNum];
+                    mulB[j] = random_mask[j - segNum];
+                }
+                mulRes[j].bitsize = Bin;
+            }
+            // TODO: check overhead statics here, put this multiplication overhead into full offline!
+            beaver_mult_offline(party_id, tmpA, tmpB, tmpC, peer, 2 * segNum);
+            beaver_mult_online(party_id, mulA, mulB, tmpA, tmpB, tmpC,
+                               mulRes, 2 * segNum, peer);
+            // put b and c into their correct position
+            for (int i = 0; i < segNum; i++){
+                coefficientList[segNum + i] = publicCoefficientList[segNum + i] * (uint64_t)(party_id - 2)
+                        - mulRes[i] * 2;
+                coefficientList[2 * segNum + i] = publicCoefficientList[2 * segNum + i] * (uint64_t )(party_id - 2)
+                        + mulRes[segNum + i];
+            }
+            delete[] tmpA;
+            delete[] tmpB;
+            delete[] tmpC;
+            delete[] mulA;
+            delete[] mulB;
+            delete[] mulRes;
+
+            output.coefficientList = coefficientList;
+            output.random_mask = random_mask;
+            break;
+        }
+        default:{
+            std::cout << "[ERROR] Unsupported approx degree!" << std::endl;
+            exit(-1);
+        }
+    }
+    return output;
+}
+
+void spline_poly_approx(int party_id, GroupElement input, GroupElement* output, SplinePolyApproxKeyPack key){
+    // Implementation of spline approximation online stage, the output of this function is the approximation
+    // on each interval, which have to be multiplied with containment result manually!
+
+    // Parse key
+    int Bin = key.Bin;
+    int degNum = key.degNum;
+    int segNum = key.segNum;
+    GroupElement* coefficientList = key.coefficientList;
+    GroupElement* random_mask = key.random_mask;
+
+    switch (degNum) {
+        case 2:{
+            // Now reconstruct input on all intervals
+            GroupElement* input_list = new GroupElement[segNum];
+            for (int i = 0; i < segNum; i++){
+                input_list[i] = input + random_mask[i];
+            }
+            reconstruct(segNum, input_list, Bin);
+            // Perform multiplication
+            for (int i = 0; i < segNum; i++){
+                output[i] = coefficientList[i] * input_list[i] * input_list[i] +
+                        coefficientList[i + segNum] * input_list[i] + coefficientList[i + 2 * segNum];
+            }
+            delete[] input_list;
+            break;
+        }
+        default:{
+            freeSplinePolyApproxKeyPack(key);
+            std::cout << "[ERROR] Unsupported approx degree!" << std::endl;
+            exit(-1);
+        }
+    }
+    freeSplinePolyApproxKeyPack(key);
+}
