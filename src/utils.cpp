@@ -534,4 +534,76 @@ void matmul_eval_helper(int dim1, int dim2, int dim3, GroupElement *A,
     }
 }
 
+void create_approx_spline(int uuid, int bitsize, int scale, GroupElement* coefficientList){
+    // uuid encoding: f+d+s<2>
+    // (f)unction : 0->sin, 1->cos, 2->tan
+    // (d)egree : 1 / 2
+    // (s)egNum: 02, 04, 08, 16, 32, 64
+    // Example: 0216 = 2 deg poly-approx to sine with 16 segs
 
+    // parse uuid
+    int deg = (uuid % 1000) / 100;
+    int seg = uuid % 100;
+    int list_size = (1 + deg) * seg;
+    switch (uuid) {
+        case 0216:{
+            // 0216 = 2 deg poly-approx to sine with 16 segs
+            // list size = 3 * 16 = 48
+            float list[] = {-2.4207849687076878e-1,-7.2390414238067667e-1,-1.1987581953565418,-1.6620675517525636,-2.1093702892801631,-2.5363586381721683,-2.9389204673831886,-3.3131788867008045,-3.6555295833987529,-3.9626755339118653,-4.2316587563840384,-4.45988879875165,-4.6451676897725758,-4.7857111218260835,-4.8801657387902724,-4.9276246922600206,
+                            3.1444284283908551,3.1745197788901646,3.2338312499498127,3.3206343716408515,3.4323712252858902,3.5656956610169006,3.7165273849992784,3.8801181849002004,4.0511293964863269,4.2237195597007684,4.3916410711697527,4.5483445137737446,4.6870892350940041,4.8010586618294626,4.8834788340360662,4.9277408790262802,
+                            -4.9216377766292095e-6,-4.8453936502295579e-4,-0.0023462618160401219,-0.0064214190445875076,-0.013408514536218837,-0.023824618470484598,-0.037961186931876514,-0.055845433416165845,-0.077208278279919537,-0.10145978194275898,-0.1276728305540428,-0.15457569066602336,-0.1805538848120348,-0.20366166671457289,-0.22164321030738637,-0.23196402094954596};
+            for (int i = 0; i < list_size; i++){
+                coefficientList[i] = GroupElement(list[i], bitsize, scale);
+            }
+            break;
+        }
+        case 0000:{
+            // This is the special case for generating coefficient for input transformation
+            // target function: sin(pi*x)
+            float list[] = { 1, 1, 1, -1,
+                             1, -1, 1, -1,
+                             0 ,1, -1, 2};
+            list_size = 12;
+            for (int i = 0; i < list_size; i++){
+                coefficientList[i] = GroupElement(list[i], bitsize, scale);
+            }
+        }
+        default:{
+            return;
+        }
+    }
+}
+
+void create_sub_lut(int function, int Bin, int Bout, int scale, int segNum, GroupElement** lut){
+    // The lut list num is identical to segNum
+    // sine 0 cosine 1 tangent 2
+    int lut_len = 1 << (Bin / segNum);
+    for (int i = 0; i < segNum; i++){
+        for (int j = 0; j < lut_len; j++){
+            switch (function) {
+                case 0:{
+                    float interval = 0.5 / (segNum * lut_len);
+                    lut[i][j] = GroupElement(sin(j * (1 << (Bin / segNum)) * interval * (2 * acos(0.0))),
+                                             Bout, scale);
+                    break;
+                }
+                case 1:{
+                    float interval = 0.5 / (segNum * lut_len);
+                    lut[i][j] = GroupElement(cos(j * interval * (1 << (Bin / segNum)) * (2 * acos(0.0))),
+                                             Bout, scale);
+                    break;
+                }
+                case 2:{
+                    float interval = 0.5 / (segNum * lut_len);
+                    lut[i][j] = GroupElement(tan(j * interval * (1 << (Bin / segNum)) * (2 * acos(0.0))),
+                                             Bout, scale);
+                    break;
+                }
+                default:{
+                    std::cout << "[ERROR] Invalid function!" << std::endl;
+                    exit(0);
+                }
+            }
+        }
+    }
+}

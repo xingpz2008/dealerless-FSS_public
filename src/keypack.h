@@ -415,14 +415,55 @@ inline void freeDigDecKeyPack(DigDecKeyPack key){
     }
 }
 
+struct PrivateLutKey{
+    int entryNum, lut_bitlen;
+    GroupElement random_mask;
+    DPFKeyPack* DPFKeyList;
+};
+
+inline void freePrivateLutKey(struct PrivateLutKey key){
+    for (int i = 0; i < key.entryNum; i++){
+        delete[] key.DPFKeyList[i].k;
+        delete[] key.DPFKeyList[i].g;
+        delete[] key.DPFKeyList[i].v;
+        delete[] key.DPFKeyList[i].random_mask;
+    }
+}
+
 struct SplinePolyApproxKeyPack{
     int Bin, Bout;
     int degNum, segNum;
     GroupElement* coefficientList;
-    GroupElement* random_mask;
+    GroupElement random_mask;
+    TRKeyPack TRKey;
+    PrivateLutKey* PriLUTKeyList;
 };
 
 inline void freeSplinePolyApproxKeyPack(SplinePolyApproxKeyPack key){
     delete[] key.coefficientList;
-    delete[] key.random_mask;
+    for (int i = 0; i < key.degNum + 1; i++){
+        freePrivateLutKey(key.PriLUTKeyList[i]);
+    }
+}
+
+struct SineKeyPack{
+    int Bin, scale, Bout;
+    bool using_lut;
+    int digdec_new_bitsize, approx_segNum, approx_deg;
+    ModularKeyPack ModKey;
+    ContainmentKeyPack CtnKey;
+    DigDecKeyPack DigDecKey;
+    DPFKeyPack* EvalAllKeyList;
+    // This public LUT seems no need to be contained in the key?
+    // GroupElement* LUT;
+    SplinePolyApproxKeyPack SplineApproxKey; // TRKey included
+    // Maybe Multiplication MTs?
+    int MTList_len;
+    GroupElement* AList;
+    GroupElement* BList;
+    GroupElement* CList;
+};
+
+inline void freeSineKeyPack(SineKeyPack Key){
+
 }

@@ -463,6 +463,25 @@ u8 cmp_2bit(int party_id, u8 a, u8 b, Peer* player){
     return out;
 }
 
+u8 cmp_2bit_opt(int party_id, u8 a, u8 b, Peer* player){
+    // a is the higher bits
+    u8 out;
+    u8 and_share_0, and_share_1;
+    and_share_0 = a;
+    switch (party_id) {
+        case 2:{
+            and_share_1 = a xor b xor 1;
+            break;
+        }
+        case 3:{
+            out = b;
+            and_share_1 = a xor b;
+        }
+    }
+    out = out xor and_wrapper(party_id, and_share_0, and_share_1, player);
+    return out;
+}
+
 u8 check_bit_overflow(int party_id, u8 x_share, u8 r_prev_share, Peer* player){
     u8 front = and_wrapper(party_id, x_share, player);
     u8 rare = and_wrapper(party_id, x_share, r_prev_share, player);

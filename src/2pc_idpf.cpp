@@ -301,7 +301,7 @@ DPFKeyPack keyGenDPF(int party_id, int Bin, int Bout,
     // Calculate [t]
     // TODO: ADD F_AND here
     // The first input is high order bit, latter is lower order bit.
-    u8 t = cmp_2bit(party_id, cmp_tau_1, cmp_tau_0, peer);
+    u8 t = cmp_2bit_opt(party_id, cmp_tau_1, cmp_tau_0, peer);
     std::cout << "Cmp 2 bit res = " << (int)t << std::endl;
 
     GroupElement sign(((party_id-2) == 1) ? 1 : -1, Bout);
@@ -491,7 +491,7 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
         u8 cmp_tau_1 = (u8)((controlBitSum >> 1) & 1);
         // Calculate [t]
         // TODO: ADD F_AND here, Correct?
-        t[i] = cmp_2bit(party_id, cmp_tau_1, cmp_tau_0, peer);
+        t[i] = cmp_2bit_opt(party_id, cmp_tau_1, cmp_tau_0, peer);
         GroupElement sign(((party_id-2) == 1) ? 1 : -1, Bout);
         // Sign = -1 for p1, 1 for p0
         W_CW_0[i] = payload[i] + levelSum * sign;
@@ -671,7 +671,7 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
         u8 cmp_tau_1 = (u8)((controlBitSum >> 1) & 1);
         // Calculate [t]
         // TODO: ADD F_AND here, Correct?
-        t[i] = cmp_2bit(party_id, cmp_tau_1, cmp_tau_0, peer);
+        t[i] = cmp_2bit_opt(party_id, cmp_tau_1, cmp_tau_0, peer);
         GroupElement sign(((party_id-2) == 1) ? 1 : -1, Bout);
         // Sign = -1 for p1, 1 for p0
         W_CW_0[i] = payload[i] + levelSum * sign;

@@ -48,6 +48,8 @@ u8 or_wrapper(int party_id, u8 data, Peer* player);
 
 u8 cmp_2bit(int party_id, u8 a, u8 b, Peer* player);
 
+u8 cmp_2bit_opt(int party_id, u8 a, u8 b, Peer* player);
+
 u8 check_bit_overflow(int party_id, u8 x_share, u8 r_prev_share, Peer* player);
 
 GroupElement cross_term_gen(int party_id, GroupElement* input, bool hold_arithmetic, Peer* player);

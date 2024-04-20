@@ -4,16 +4,16 @@
 
 #include "2pc_api.h"
 
-ModularKeyPack modular_offline(int party_id, GroupElement N, GroupElement* res){
+ModularKeyPack modular_offline(int party_id, GroupElement N, int Bout){
     // This is the offline function of modular
     // We need a secure comparison
-    // WARNING: This input N should be additive shared N
     // WARNING: Shared payload!
     ModularKeyPack output;
-    GroupElement* one = new GroupElement((uint64_t)(party_id - 2), res->bitsize);
-    output.iDCFKey = keyGeniDCF(party_id, N.bitsize, res->bitsize, N, one);
+    GroupElement* one = new GroupElement((uint64_t)(party_id - 2), Bout);
+    GroupElement shared_N = N * (uint64_t)(party_id - 2);
+    output.iDCFKey = keyGeniDCF(party_id, N.bitsize, Bout, shared_N, one);
     output.Bin = N.bitsize;
-    output.Bout = res->bitsize;
+    output.Bout = Bout;
     delete one;
     return output;
 }
@@ -56,19 +56,19 @@ GroupElement truncate_and_reduce(int party_id, GroupElement input, int s, TRKeyP
     return output;
 }
 
-ContainmentKeyPack containment_offline(int party_id, GroupElement* knots_list, int knots_size){
+ContainmentKeyPack containment_offline(int party_id, int Bout, GroupElement* knots_list, int knots_size){
     // In the implementation, we assume that there are two fixed knots on 0 and 2^s-1
     // knot list and knot size do not contain this, i.e. we actually have size+1 intervals
     // WARNING: The input of knots list should be secret shared!
     ContainmentKeyPack output;
     output.Bin = knots_list[0].bitsize;
-    output.Bout = output.Bin;
-    output.AList = new GroupElement[knots_size - 1];
-    output.BList = new GroupElement[knots_size - 1];
-    output.CList = new GroupElement[knots_size - 1];
+    output.Bout = Bout;
+    output.AList = new GroupElement[knots_size];
+    output.BList = new GroupElement[knots_size];
+    output.CList = new GroupElement[knots_size];
     output.iDCFKeyList = new iDCFKeyPack[knots_size];
     output.CtnNum = knots_size;
-    beaver_mult_offline(party_id, output.AList, output.BList, output.CList, peer, knots_size - 1);
+    beaver_mult_offline(party_id, output.AList, output.BList, output.CList, peer, knots_size);
     GroupElement* one = new GroupElement((uint64_t)(party_id - 2), output.Bout);
     for (int i = 0; i < knots_size; i++){
         output.iDCFKeyList[i] = keyGeniDCF(party_id, output.Bin, output.Bout, knots_list[i], one);
@@ -80,7 +80,7 @@ ContainmentKeyPack containment_offline(int party_id, GroupElement* knots_list, i
 void containment(int party_id, GroupElement input, GroupElement* output, int knots_size, ContainmentKeyPack key){
     // Iterative arithmetic AND for constant online rounds?
     // Batched reconstruction of GE
-    // we only output [0,x1,x2,...,N] segments, i.e. same as knots size
+    // The output should be knots_size + 1 vector
     assert(knots_size == key.CtnNum);
     assert(knots_size > 0);
     GroupElement* input_array = new GroupElement[knots_size];
@@ -95,13 +95,16 @@ void containment(int party_id, GroupElement input, GroupElement* output, int kno
 
     // Observation: We only need knots_num - 1 multiplication as the first segment is identical to DCF output.
     output[0] = dcf_output[0];
-    GroupElement* multA = new GroupElement[knots_size - 1];
-    GroupElement* multB = new GroupElement[knots_size - 1];
+    GroupElement* multA = new GroupElement[knots_size];
+    GroupElement* multB = new GroupElement[knots_size];
     for (int i = 0; i < knots_size - 1; i++){
         multA[i] = dcf_output[i + 1];
-        multB[i] = dcf_output[i] * -1 + (uint64_t)party_id;
+        multB[i] = dcf_output[i] * -1 + (uint64_t)(party_id - 2);
     }
-    beaver_mult_online(party_id, multA, multB, key.AList, key.BList, key.CList, &(output[1]), knots_size - 1, peer);
+    multA[knots_size - 1] = GroupElement((uint64_t)(party_id - 2), multA[0].bitsize);
+    multB[knots_size - 1] = dcf_output[knots_size - 1] * -1 + (uint64_t)(party_id - 2);
+    beaver_mult_online(party_id, multA, multB, key.AList, key.BList, key.CList,
+                       &(output[1]), knots_size, peer);
 
     delete[] dcf_output;
     delete[] input_array;
@@ -112,7 +115,7 @@ void containment(int party_id, GroupElement input, GroupElement* output, int kno
 
 DigDecKeyPack digdec_offline(int party_id, int Bin, int NewBitSize){
     DigDecKeyPack output;
-    int SegNum = Bin / NewBitSize + ((Bin % NewBitSize == 0) ? 0 : 1);
+    int SegNum = Bin / NewBitSize + ((Bin % NewBitSize == 0) ? 1 : 0);
     output.Bin = Bin;
     output.NewBitSize = NewBitSize;
     output.SegNum = SegNum;
@@ -213,19 +216,23 @@ void digdec(int party_id, GroupElement input, GroupElement* output, int NewBitSi
     return;
 }
 
-DPFKeyPack lut_offline(int party_id, int table_size, int idx_bitlen, int lut_bitlen){
+DPFKeyPack pub_lut_offline(int party_id, int idx_bitlen, int lut_bitlen){
     // Offline stage of lut functionality
     prng.SetSeed(osuCrypto::toBlock(party_id, time(NULL)));
     auto s = prng.get<int>();
-    GroupElement* lut_index_shared = new GroupElement(s, idx_bitlen);
+    GroupElement lut_index_shared(s, idx_bitlen);
+    mod(lut_index_shared);
+    GroupElement* lut_index_shared_ptr = new GroupElement(0, idx_bitlen);
+    lut_index_shared_ptr->value = lut_index_shared.value;
     GroupElement one(party_id - 2, lut_bitlen);
-    DPFKeyPack output = keyGenDPF(party_id, idx_bitlen, lut_bitlen, *(lut_index_shared), one, false);
+    DPFKeyPack output = keyGenDPF(party_id, idx_bitlen, lut_bitlen, lut_index_shared, one, false);
     // Parse random info into it.
-    output.random_mask = lut_index_shared;
+    output.random_mask = lut_index_shared_ptr;
     return output;
 }
 
-GroupElement lut(int party_id, GroupElement input, GroupElement* table, int table_size, int output_bitlen, DPFKeyPack key){
+GroupElement pub_lut(int party_id, GroupElement input, GroupElement* table, GroupElement* shifted_full_domain_res,
+                 int table_size, int output_bitlen, DPFKeyPack key){
     // This is the implementation of DPF based public lookup table protocol
     // This considers a masked input, i.e. x=c -> x+r=c+r
     // However, we do not have to reconstruct input at first. We perform the DPF evaluation at place r.
@@ -233,7 +240,7 @@ GroupElement lut(int party_id, GroupElement input, GroupElement* table, int tabl
 
     // Perform evalAll
     GroupElement* full_domain_res = new GroupElement[table_size];
-    GroupElement* shifted_full_domain_res = new GroupElement[table_size];
+    // GroupElement* shifted_full_domain_res = new GroupElement[table_size];
     for(int i = 0; i < table_size; i++){
         // Init res bit size
         full_domain_res[i].bitsize = table[i].bitsize;
@@ -253,6 +260,10 @@ GroupElement lut(int party_id, GroupElement input, GroupElement* table, int tabl
     GroupElement abs_val = left_flag ? shift_amount :
             GroupElement((1ULL << shift_amount.bitsize) - shift_amount.value, shift_amount.bitsize);
     mod(abs_val);
+    bool output_vector = (shifted_full_domain_res != NULL);
+    if (!output_vector){
+        shifted_full_domain_res = new GroupElement[table_size];
+    }
     for (int i = 0; i < table_size; i++){
         int real_vector_idx = (i + abs_val.value * (2 * (int)left_flag - 1)) % (1ULL << table_size);
         shifted_full_domain_res[i] = full_domain_res[real_vector_idx];
@@ -260,12 +271,51 @@ GroupElement lut(int party_id, GroupElement input, GroupElement* table, int tabl
         output = output + shifted_full_domain_res[i] * table[i];
     }
 
+    if (!output_vector){
+        delete[] shifted_full_domain_res;
+    }
     delete[] full_domain_res;
-    delete[] shifted_full_domain_res;
     delete[] key.k;
     delete[] key.g;
     delete[] key.v;
     delete[] key.random_mask;
+    return output;
+}
+
+PrivateLutKey pri_lut_offline(int party_id, int idx_bitlen, int lut_bitlen, GroupElement* priList){
+    PrivateLutKey output;
+    int entry = 1 << idx_bitlen;
+    output.entryNum = entry;
+    output.lut_bitlen = lut_bitlen;
+
+    prng.SetSeed(osuCrypto::toBlock(party_id, time(NULL)));
+    auto s = prng.get<int>();
+    s = s % (1ULL << idx_bitlen);
+    GroupElement random_mask(s, idx_bitlen);
+    output.DPFKeyList = new DPFKeyPack[entry];
+    for(int i = 0; i < entry; i++){
+        output.DPFKeyList[i] = keyGenDPF(party_id, idx_bitlen, lut_bitlen, (random_mask + i) * (uint64_t)(party_id - 2),
+                                         priList[i], false);
+    }
+    output.random_mask = random_mask;
+    return output;
+}
+
+GroupElement pri_lut(int party_id, GroupElement idx, PrivateLutKey key){
+    // Parse key
+    GroupElement random_mask = key.random_mask;
+    int entryNum = key.entryNum;
+    DPFKeyPack* DPFKeyList = key.DPFKeyList;
+    GroupElement output(0, key.lut_bitlen);
+    GroupElement real_input = idx + random_mask;
+    reconstruct(&real_input);
+    GroupElement* tmp_output = new GroupElement(0, key.lut_bitlen);
+    for (int i = 0; i < entryNum; i++){
+        evalDPF(party_id, tmp_output, real_input, DPFKeyList[i], false);
+        output = output + *(tmp_output);
+    }
+
+    delete tmp_output;
     return output;
 }
 
@@ -278,50 +328,51 @@ SplinePolyApproxKeyPack spline_poly_approx_offline(int party_id, int Bin, int Bo
     output.Bout = Bout;
     output.degNum = degree;
     output.segNum = segNum;
+    int truncation_bits = Bin / segNum;
     switch (degree) {
         case 2:{
             // For two-degree polynomial, we have three coefficient ax2+bx+c -> ax2+(b-2ar)x+c+r2
             // The output coefficient list is stored as follows: aaaaabbbbbccccc
             GroupElement* coefficientList = new GroupElement[3 * segNum];
-            GroupElement* random_mask = new GroupElement[segNum];
+            GroupElement random_mask;
             prng.SetSeed(osuCrypto::toBlock(party_id, time(NULL)));
+            random_mask = GroupElement(prng.get<uint64_t>(), Bin);
+            mod(random_mask);
             for (int i = 0; i < segNum; i++){
-                random_mask[i] = GroupElement(prng.get<uint64_t>(), Bin);
                 // create a:
                 // Converting into shares
                 coefficientList[i] = publicCoefficientList[i] * (uint64_t)(party_id - 2);
             }
             // create b:
-            // There should be a multiplication with a and r, here we need 2 * seg MTs in all
-            GroupElement* tmpA = new GroupElement[2 * segNum];
-            GroupElement* tmpB = new GroupElement[2 * segNum];
-            GroupElement* tmpC = new GroupElement[2 * segNum];
-            GroupElement* mulA = new GroupElement[2 * segNum];
-            GroupElement* mulB = new GroupElement[2 * segNum];
-            GroupElement* mulRes = new GroupElement[2 * segNum];
-            for (int j = 0; j < 2 * segNum; j++){
+            // There should be a multiplication with a and r, here we need seg + 1 MTs in all
+            GroupElement* tmpA = new GroupElement[1 + segNum];
+            GroupElement* tmpB = new GroupElement[1 + segNum];
+            GroupElement* tmpC = new GroupElement[1 + segNum];
+            GroupElement* mulA = new GroupElement[1 + segNum];
+            GroupElement* mulB = new GroupElement[1 + segNum];
+            GroupElement* mulRes = new GroupElement[1 + segNum];
+            for (int j = 0; j < 1 + segNum; j++){
                 tmpA[j].bitsize = Bin;
                 tmpB[j].bitsize = Bin;
                 tmpC[j].bitsize = Bin;
                 if (j < segNum){
                     mulA[j] = coefficientList[j];
-                    mulB[j] = random_mask[j];
                 }else{
-                    mulA[j] = random_mask[j - segNum];
-                    mulB[j] = random_mask[j - segNum];
+                    mulA[j] = random_mask;
                 }
+                mulB[j] = random_mask;
                 mulRes[j].bitsize = Bin;
             }
             // TODO: check overhead statics here, put this multiplication overhead into full offline!
-            beaver_mult_offline(party_id, tmpA, tmpB, tmpC, peer, 2 * segNum);
+            beaver_mult_offline(party_id, tmpA, tmpB, tmpC, peer, 1 + segNum);
             beaver_mult_online(party_id, mulA, mulB, tmpA, tmpB, tmpC,
-                               mulRes, 2 * segNum, peer);
+                               mulRes, 1 + segNum, peer);
             // put b and c into their correct position
             for (int i = 0; i < segNum; i++){
                 coefficientList[segNum + i] = publicCoefficientList[segNum + i] * (uint64_t)(party_id - 2)
                         - mulRes[i] * 2;
                 coefficientList[2 * segNum + i] = publicCoefficientList[2 * segNum + i] * (uint64_t )(party_id - 2)
-                        + mulRes[segNum + i];
+                        + mulRes[segNum];
             }
             delete[] tmpA;
             delete[] tmpB;
@@ -332,6 +383,12 @@ SplinePolyApproxKeyPack spline_poly_approx_offline(int party_id, int Bin, int Bo
 
             output.coefficientList = coefficientList;
             output.random_mask = random_mask;
+            output.TRKey = truncate_and_reduce_offline(party_id, Bin, truncation_bits);
+            output.PriLUTKeyList = new PrivateLutKey[degree + 1];
+            for (int i = 0; i < degree + 1; i++){
+                output.PriLUTKeyList[i] = pri_lut_offline(party_id, log2ceil(segNum),
+                                                          Bout, &(coefficientList[i * segNum]));
+            }
             break;
         }
         default:{
@@ -342,31 +399,39 @@ SplinePolyApproxKeyPack spline_poly_approx_offline(int party_id, int Bin, int Bo
     return output;
 }
 
-void spline_poly_approx(int party_id, GroupElement input, GroupElement* output, SplinePolyApproxKeyPack key){
+GroupElement spline_poly_approx(int party_id, GroupElement input, SplinePolyApproxKeyPack key){
     // Implementation of spline approximation online stage, the output of this function is the approximation
     // on each interval, which have to be multiplied with containment result manually!
+
+    // Note: we can directly call segment() for GE in segmentation.
 
     // Parse key
     int Bin = key.Bin;
     int degNum = key.degNum;
     int segNum = key.segNum;
     GroupElement* coefficientList = key.coefficientList;
-    GroupElement* random_mask = key.random_mask;
+    GroupElement random_mask = key.random_mask;
+    TRKeyPack TRKey = key.TRKey;
+    PrivateLutKey* PriLUTKeyList = key.PriLUTKeyList;
+    GroupElement output(0, coefficientList[0].bitsize);
 
     switch (degNum) {
         case 2:{
             // Now reconstruct input on all intervals
-            GroupElement* input_list = new GroupElement[segNum];
-            for (int i = 0; i < segNum; i++){
-                input_list[i] = input + random_mask[i];
+            GroupElement real_input = input + random_mask;
+            reconstruct(&real_input);
+            GroupElement truncated_input = truncate_and_reduce(party_id, real_input * (uint64_t)(party_id - 2), input.bitsize / segNum, TRKey);
+            // Call LUT
+            // For degNum approx, we have deg + 1 coefficient
+            // fetch coefficient
+            GroupElement lut_output[degNum + 1];
+            for (int i = 0; i < degNum + 1; i++){
+                lut_output[i] = pri_lut(party_id, truncated_input, PriLUTKeyList[i]);
             }
-            reconstruct(segNum, input_list, Bin);
+
             // Perform multiplication
-            for (int i = 0; i < segNum; i++){
-                output[i] = coefficientList[i] * input_list[i] * input_list[i] +
-                        coefficientList[i + segNum] * input_list[i] + coefficientList[i + 2 * segNum];
-            }
-            delete[] input_list;
+            output = lut_output[0] * real_input * real_input + lut_output[1] * real_input + lut_output[2];
+            delete[] lut_output;
             break;
         }
         default:{
@@ -376,4 +441,5 @@ void spline_poly_approx(int party_id, GroupElement input, GroupElement* output, 
         }
     }
     freeSplinePolyApproxKeyPack(key);
+    return output;
 }

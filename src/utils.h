@@ -24,6 +24,7 @@ SOFTWARE.
 #include "group_element.h"
 #include "comms.h"
 #include "omp.h"
+#include <cmath>
 
 template <typename T>
 using matrix = std::vector<std::vector<T>>;
@@ -79,3 +80,6 @@ int64_t getSignedValue(GroupElement x);
 void matmul_eval_helper(int dim1, int dim2, int dim3, GroupElement *A,
                             GroupElement *B, GroupElement *C, GroupElement *ka, GroupElement *kb, GroupElement *kc);
 
+void create_approx_spline(int uudi, int bitsize, int scale, GroupElement* coefficientList);
+
+void create_sub_lut(int function, int Bin, int Bout, int scale, int segNum, GroupElement** lut);

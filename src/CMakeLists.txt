@@ -48,7 +48,8 @@ add_library(fss STATIC
     spline.cpp
     input_prng.cpp
         2pcwrapper.cpp
-    2pc_api.cpp)
+    2pc_api.cpp
+    2pc_math.cpp)
 
 find_package(Threads REQUIRED)
 
@@ -127,6 +128,7 @@ install(FILES
         "config.h"
         "2pcwrapper.h"
         "2pc_api.h"
+        "2pc_math.h"
         DESTINATION include)
 
 install(DIRECTORY
