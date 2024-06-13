@@ -115,7 +115,7 @@ void containment(int party_id, GroupElement input, GroupElement* output, int kno
 
 DigDecKeyPack digdec_offline(int party_id, int Bin, int NewBitSize){
     DigDecKeyPack output;
-    int SegNum = Bin / NewBitSize + ((Bin % NewBitSize == 0) ? 1 : 0);
+    int SegNum = Bin / NewBitSize + ((Bin % NewBitSize == 0) ? 0 : 1);
     output.Bin = Bin;
     output.NewBitSize = NewBitSize;
     output.SegNum = SegNum;
@@ -328,7 +328,7 @@ SplinePolyApproxKeyPack spline_poly_approx_offline(int party_id, int Bin, int Bo
     output.Bout = Bout;
     output.degNum = degree;
     output.segNum = segNum;
-    int truncation_bits = Bin / segNum;
+    int truncation_bits = Bin - log2floor(segNum);
     switch (degree) {
         case 2:{
             // For two-degree polynomial, we have three coefficient ax2+bx+c -> ax2+(b-2ar)x+c+r2
@@ -420,7 +420,7 @@ GroupElement spline_poly_approx(int party_id, GroupElement input, SplinePolyAppr
             // Now reconstruct input on all intervals
             GroupElement real_input = input + random_mask;
             reconstruct(&real_input);
-            GroupElement truncated_input = truncate_and_reduce(party_id, real_input * (uint64_t)(party_id - 2), input.bitsize / segNum, TRKey);
+            GroupElement truncated_input = truncate_and_reduce(party_id, real_input * (uint64_t)(party_id - 2), input.bitsize - log2floor(segNum), TRKey);
             // Call LUT
             // For degNum approx, we have deg + 1 coefficient
             // fetch coefficient
@@ -431,7 +431,6 @@ GroupElement spline_poly_approx(int party_id, GroupElement input, SplinePolyAppr
 
             // Perform multiplication
             output = lut_output[0] * real_input * real_input + lut_output[1] * real_input + lut_output[2];
-            delete[] lut_output;
             break;
         }
         default:{

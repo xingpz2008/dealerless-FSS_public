@@ -40,15 +40,21 @@ u8 and_wrapper(int party_id, GroupElement* dataA, GroupElement* dataB, Peer* pla
 
 u8 and_wrapper(int party_id, u8 dataA, u8 dataB, Peer* player);
 
+void and_wrapper(int party_id, u8* dataA, u8* dataB, u8* output, int size, Peer* player);
+
 u8 and_wrapper(int party_id, u8 data, Peer* player);
 
 u8 or_wrapper(int party_id, u8 dataA, u8 dataB, Peer* player);
+
+void or_wrapper(int party_id, u8* dataA, u8* dataB, u8* output, int size, Peer* player);
 
 u8 or_wrapper(int party_id, u8 data, Peer* player);
 
 u8 cmp_2bit(int party_id, u8 a, u8 b, Peer* player);
 
 u8 cmp_2bit_opt(int party_id, u8 a, u8 b, Peer* player);
+
+void cmp_2bit_opt(int party_id, u8* a, u8* b, u8* output, int size, Peer* player);
 
 u8 check_bit_overflow(int party_id, u8 x_share, u8 r_prev_share, Peer* player);
 
@@ -65,3 +71,5 @@ void beaver_mult_online(int party_id, GroupElement input0, GroupElement input1,
 void beaver_mult_online(int party_id, GroupElement* input0, GroupElement* input1,
                         GroupElement* a, GroupElement* b, GroupElement* c,
                         GroupElement* output, int size, Peer* player);
+
+void B2A(int party_id, u8* x, GroupElement* y, int size, int bw_y, Peer* player);

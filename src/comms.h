@@ -59,6 +59,7 @@ public:
     std::fstream file;
     uint64_t bytesSent = 0;
     uint64_t bytesReceived = 0;
+    uint64_t rounds = 0;
     sci::IOPack *iopack_;
     sci::OTPack *otpack;
     //sci::IOPack *iopack_= new sci::IOPack(party, port);
@@ -88,6 +89,10 @@ public:
     void send_block(const osuCrypto::block &b);
 
     void send_u8(const u8&);
+
+    void send_u8(u8* b, int size);
+
+    void recv_u8(u8* output, int size);
 
     void send_u64(const uint64_t &b);
 

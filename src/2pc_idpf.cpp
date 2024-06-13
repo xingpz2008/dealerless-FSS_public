@@ -107,7 +107,7 @@ DPFKeyPack keyGenDPF(int party_id, int Bin, int Bout,
     auto s = prng.get<std::array<block, 1>>();
     // We maintain a list of seeds, which indicates the nodes on i-th level
     // We directly request the largest amount of storage, as 2^Bin,
-    int lastLevelNodes = (int)pow(2, Bin);
+    int lastLevelNodes = 1 << Bin;
     auto* levelNodes = new block[lastLevelNodes];
     auto* nextLevelNodes = new block[lastLevelNodes];
     auto* nextLevelControlBits = new u8[lastLevelNodes];
@@ -136,15 +136,15 @@ DPFKeyPack keyGenDPF(int party_id, int Bin, int Bout,
     u8 level_and_res = 0;
     for (int i = 0; i < Bin; i++) {
         real_idx[Bin - i - 1] = idx[Bin - i - 1] ^ level_and_res;
-        std::cout << "Idx (from lsb) = " << (int) idx[Bin - i - 1] << std::endl;
-        std::cout << "Real idx " << Bin - i - 1 << "= " << (int)real_idx[Bin - i - 1];
+        //std::cout << "Idx (from lsb) = " << (int) idx[Bin - i - 1] << std::endl;
+        //std::cout << "Real idx " << Bin - i - 1 << "= " << (int)real_idx[Bin - i - 1];
         level_and_res = check_bit_overflow(party_id, idx[Bin - i - 1], level_and_res, peer);
         std::cout << ", level and res = " << (int)level_and_res << std::endl;
     }
 
     for (int i = 0; i < Bin; i++){
-        std::cout << "Seed = " << s[0] << std::endl;
-        std::cout << "Layer " << i << std::endl;
+        //std::cout << "Seed = " << s[0] << std::endl;
+        //std::cout << "Layer " << i << std::endl;
         block leftChildren = ZeroBlock;
         block rightChildren = ZeroBlock;
 
@@ -152,7 +152,7 @@ DPFKeyPack keyGenDPF(int party_id, int Bin, int Bout,
         // We use 128 bit as the seed, instead of 128-1 in llama
         // The seeds number is 2^i
         int expandNum = (int)pow(2, i);
-        std::cout << "levelNodes=" << std::endl;
+        //std::cout << "levelNodes=" << std::endl;
         for (int j = 0; j < expandNum; j++){
             // To expand, we first set AES enc keys, with 2^i AES instances
             AESInstance.setKey(levelNodes[j]);
@@ -180,7 +180,7 @@ DPFKeyPack keyGenDPF(int party_id, int Bin, int Bout,
             nextLevelNodes[2 * j] = ct[0];
             nextLevelNodes[2 * j + 1] = ct[1];
         }
-        std::cout << "Expand res = " << std::endl;
+        //std::cout << "Expand res = " << std::endl;
         for (int j=0;j<expandNum;j++){
             std::cout << nextLevelNodes [2 * j] << ", " << (int)lsb(nextLevelNodes[2 * j]) << std::endl;
             std::cout << nextLevelNodes [2 * j + 1] << ", " << (int)lsb(nextLevelNodes[2 * j + 1]) << std::endl;
@@ -212,7 +212,7 @@ DPFKeyPack keyGenDPF(int party_id, int Bin, int Bout,
         block recR = rightChildren;
         reconstruct(&recL);
         reconstruct(&recR);
-        std::cout << "recL = "<<recL<<", recR = " << recR << std::endl;
+        //std::cout << "recL = "<<recL<<", recR = " << recR << std::endl;
 
         reconstruct(&sigma);
         //std::cout << "Sigma after construct = "<<sigma << std::endl;
@@ -227,9 +227,9 @@ DPFKeyPack keyGenDPF(int party_id, int Bin, int Bout,
         // Third step: update seeds
         // For every seed in the level, it should xor t * this_level.CW, where t is the control bit
         // TODO: !!!!check correctness of level control bits!!!
-        std::cout << "Real idx= " << (int)real_idx[i] << std::endl;
-        std::cout << "left C = " << leftChildren << " right C = " << rightChildren << " sigma =" << sigma << std::endl;
-        std::cout << "tau_0 = " << (int)tau_0 << " tau_1 = " << (int)tau_1 << std::endl;
+        //std::cout << "Real idx= " << (int)real_idx[i] << std::endl;
+        //std::cout << "left C = " << leftChildren << " right C = " << rightChildren << " sigma =" << sigma << std::endl;
+        //std::cout << "tau_0 = " << (int)tau_0 << " tau_1 = " << (int)tau_1 << std::endl;
         for (int j = 0; j < expandNum; j++){
             nextLevelControlBits[2 * j] = lsb(nextLevelNodes[2 * j]);
             nextLevelControlBits[2 * j + 1] = lsb(nextLevelNodes[2 * j + 1]);
@@ -253,7 +253,7 @@ DPFKeyPack keyGenDPF(int party_id, int Bin, int Bout,
             levelControlBits[2 * j + 1] = nextLevelControlBits[2 * j + 1];
         }
         std::cout << std::endl;
-        std::cout << "Next levelNodes=" << std::endl;
+        //std::cout << "Next levelNodes=" << std::endl;
         for (int j=0; j<expandNum;j++){
             std::cout << levelNodes[2*j] << ", "<< (int)levelControlBits[2*j]<< std::endl;
             std::cout << levelNodes[2*j+1] << ", "<< (int)levelControlBits[2*j+1]<< std::endl;
@@ -267,7 +267,7 @@ DPFKeyPack keyGenDPF(int party_id, int Bin, int Bout,
     // We also need to add all Converted elements
     uint64_t lastLevelElements[lastLevelNodes];
     uint64_t lastLevelSum = 0;
-    std::cout << "Last level expansion:" << std::endl;
+    //std::cout << "Last level expansion:" << std::endl;
     for (int i = 0; i < lastLevelNodes; i++){
         two_pc_convert(Bout, 1, levelNodes[i], &lastLevelElements[i]);
 
@@ -293,7 +293,7 @@ DPFKeyPack keyGenDPF(int party_id, int Bin, int Bout,
         lastLevelSum = lastLevelSum + lastLevelElements[i];
         controlBitSum = controlBitSum + (uint64_t)levelControlBits[i];
         std::cout << levelNodes[i] << ", " << (int)levelControlBits[i] << ", " << lastLevelElements[i];
-        std::cout << ", CtrlBitSum = " << (int)controlBitSum << ", LevelSum = " << lastLevelSum << std::endl;
+        //std::cout << ", CtrlBitSum = " << (int)controlBitSum << ", LevelSum = " << lastLevelSum << std::endl;
     }
     // Get last 2 bits of bits sum to compare
     u8 cmp_tau_0 = (u8)(controlBitSum & 1);
@@ -302,30 +302,31 @@ DPFKeyPack keyGenDPF(int party_id, int Bin, int Bout,
     // TODO: ADD F_AND here
     // The first input is high order bit, latter is lower order bit.
     u8 t = cmp_2bit_opt(party_id, cmp_tau_1, cmp_tau_0, peer);
-    std::cout << "Cmp 2 bit res = " << (int)t << std::endl;
+    //std::cout << "Cmp 2 bit res = " << (int)t << std::endl;
 
     GroupElement sign(((party_id-2) == 1) ? 1 : -1, Bout);
-    // Sign = -1 for p1, 1 for p0
+    // Sign = -1 for p0, 1 for p1
     GroupElement W_CW_0 = payload + lastLevelSum * sign;
     GroupElement W_CW_1 = -payload + lastLevelSum * (-sign);
-    std::cout << "WCW: 0 = " << W_CW_0.value << ", 1 = " << W_CW_1.value << std::endl;
+    //std::cout << "WCW: 0 = " << W_CW_0.value << ", 1 = " << W_CW_1.value << std::endl;
     auto* W_CW = new GroupElement(0, Bout);
 
     // TODO: Add mux2 here
     //multiplexer2(party_id, &t, &W_CW_0, &W_CW_1, W_CW, 1, peer);
     multiplexer2(party_id, &t, &W_CW_0, &W_CW_1, W_CW, 1, peer);
-    std::cout << "WCW after MUX = " << W_CW->value << std::endl;
+    //std::cout << "WCW after MUX = " << W_CW->value << std::endl;
 
     // (party_id-1)==1?server:client
 
     reconstruct(W_CW);
-    std::cout << "WCW = " << W_CW->value << std::endl;
+    //std::cout << "WCW = " << W_CW->value << std::endl;
 
     //Free space
     delete[] levelNodes;
     delete[] nextLevelNodes;
     delete[] nextLevelControlBits;
     delete[] levelControlBits;
+    delete[] real_idx;
 
     // in DPF, swc is the seed for each level from root level, W_CW is to help convert output from Z_2 to Z_n
     return {Bin, Bout, 1, scw, W_CW, tau, mask};
@@ -337,7 +338,7 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
                      GroupElement idx, GroupElement* payload, bool call_from_DCF, bool masked)
 {
     // This is the 2pc generation of iDPF Key, proceed with multiple payload
-    std::cout << "==========iDPF Gen==========" << std::endl;
+    //std::cout << "==========iDPF Gen==========" << std::endl;
     static const block notOneBlock = osuCrypto::toBlock(~0, ~1);
     static const block notThreeBlock = osuCrypto::toBlock(~0, ~3);
     const static block pt[2] = {ZeroBlock, OneBlock};
@@ -367,6 +368,11 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
     GroupElement W_CW_0[Bin];
     GroupElement W_CW_1[Bin];
     u8 t[Bin];
+    u8 cmp_tau_0[Bin], cmp_tau_1[Bin];
+    uint64_t levelSum[Bin];
+    for (int i = 0; i < Bin; i++){
+        levelSum[i] = 0;
+    }
 
     // Variants for iDPF CW calculation
     uint64_t levelElements[lastLevelNodes];
@@ -394,10 +400,10 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
     }else{
         for (int i = 0; i < Bin; i++) {
             real_idx[Bin - i - 1] = idx[Bin - i - 1] ^ level_and_res;
-            std::cout << "Idx (from lsb) = " << (int) idx[Bin - i - 1] << std::endl;
-            std::cout << "Real idx " << Bin - i - 1 << "= " << (int)real_idx[Bin - i - 1];
+            //std::cout << "Idx (from lsb) = " << (int) idx[Bin - i - 1] << std::endl;
+            //std::cout << "Real idx " << Bin - i - 1 << "= " << (int)real_idx[Bin - i - 1];
             level_and_res = check_bit_overflow(party_id, idx[Bin - i - 1], level_and_res, peer);
-            std::cout << ", level and res = " << (int)level_and_res << std::endl;
+            //std::cout << ", level and res = " << (int)level_and_res << std::endl;
         }
     }
 
@@ -479,26 +485,25 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
         // Forth Step: calculate layer-wise CW
         // To begin with, we add all control bits together
         uint64_t controlBitSum = 0;
-        uint64_t levelSum = 0;
+
         // We also need to add all Converted elements
         for (int j = 0; j < 2 * expandNum; j++){
             two_pc_convert(Bout, &levelNodes[j], &levelElements[j], &levelNodes[j]);
-            levelSum = levelSum + levelElements[j];
+            levelSum[i] = levelSum[i] + levelElements[j];
             controlBitSum = controlBitSum + (uint64_t)levelControlBits[j];
         }
         // Get last 2 bits of bits sum to compare
-        u8 cmp_tau_0 = (u8)(controlBitSum & 1);
-        u8 cmp_tau_1 = (u8)((controlBitSum >> 1) & 1);
-        // Calculate [t]
-        // TODO: ADD F_AND here, Correct?
-        t[i] = cmp_2bit_opt(party_id, cmp_tau_1, cmp_tau_0, peer);
-        GroupElement sign(((party_id-2) == 1) ? 1 : -1, Bout);
-        // Sign = -1 for p1, 1 for p0
-        W_CW_0[i] = payload[i] + levelSum * sign;
-        W_CW_1[i] = -payload[i] + levelSum * -sign;
-
-        // TODO: Add mux2 here
+        cmp_tau_0[i] = (u8)(controlBitSum & 1);
+        cmp_tau_1[i] = (u8)((controlBitSum >> 1) & 1);
     }
+    GroupElement sign(((party_id-2) == 1) ? 1 : -1, Bout);
+    // Sign = -1 for p1, 1 for p0
+    for (int i = 0; i < Bin; i++){
+        W_CW_0[i] = payload[i] + levelSum[i] * sign;
+        W_CW_1[i] = -payload[i] + levelSum[i] * -sign;
+    }
+    // Calculate [t]
+    cmp_2bit_opt(party_id, cmp_tau_1, cmp_tau_0, t, Bin, peer);
     multiplexer2(party_id, t, W_CW_0, W_CW_1, W_CW, (int32_t)Bin, peer);
     reconstruct((int32_t)Bin, W_CW, Bout);
 
@@ -514,7 +519,7 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
 DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
                       u8* idx, GroupElement* payload, bool call_from_DCF, bool masked)
 {
-    std::cout << "==========iDPF Gen==========" << std::endl;
+    //std::cout << "==========iDPF Gen==========" << std::endl;
     // This is the 2pc generation of iDPF Key, proceed with multiple payload
     static const block notOneBlock = osuCrypto::toBlock(~0, ~1);
     static const block notThreeBlock = osuCrypto::toBlock(~0, ~3);
@@ -544,6 +549,8 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
     GroupElement W_CW_0[Bin];
     GroupElement W_CW_1[Bin];
     u8 t[Bin];
+    u8 cmp_tau_0[Bin], cmp_tau_1[Bin];
+    uint64_t levelSum[Bin];
 
     // Variants for iDPF CW calculation
     uint64_t levelElements[lastLevelNodes];
@@ -551,6 +558,7 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
 
     for (int i = 0; i < Bin; i++){
         W_CW[i].bitsize = Bout;
+        levelSum[i] = 0;
     }
 
     // Preparing random mask
@@ -574,10 +582,10 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
     }else{
         for (int i = 0; i < Bin; i++) {
             real_idx[Bin - i - 1] = idx[Bin - i - 1] ^ level_and_res;
-            std::cout << "Idx (from lsb) = " << (int) idx[Bin - i - 1] << std::endl;
-            std::cout << "Real idx " << Bin - i - 1 << "= " << (int)real_idx[Bin - i - 1];
+            //std::cout << "Idx (from lsb) = " << (int) idx[Bin - i - 1] << std::endl;
+            //std::cout << "Real idx " << Bin - i - 1 << "= " << (int)real_idx[Bin - i - 1];
             level_and_res = check_bit_overflow(party_id, idx[Bin - i - 1], level_and_res, peer);
-            std::cout << ", level and res = " << (int)level_and_res << std::endl;
+            //std::cout << ", level and res = " << (int)level_and_res << std::endl;
         }
     }
 
@@ -659,24 +667,23 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
         // Forth Step: calculate layer-wise CW
         // To begin with, we add all control bits together
         uint64_t controlBitSum = 0;
-        uint64_t levelSum = 0;
         // We also need to add all Converted elements
         for (int j = 0; j < 2 * expandNum; j++){
             two_pc_convert(Bout, &levelNodes[j], &levelElements[j], &levelNodes[j]);
-            levelSum = levelSum + levelElements[j];
+            levelSum[i] = levelSum[i] + levelElements[j];
             controlBitSum = controlBitSum + (uint64_t)levelControlBits[j];
         }
         // Get last 2 bits of bits sum to compare
-        u8 cmp_tau_0 = (u8)(controlBitSum & 1);
-        u8 cmp_tau_1 = (u8)((controlBitSum >> 1) & 1);
-        // Calculate [t]
-        // TODO: ADD F_AND here, Correct?
-        t[i] = cmp_2bit_opt(party_id, cmp_tau_1, cmp_tau_0, peer);
-        GroupElement sign(((party_id-2) == 1) ? 1 : -1, Bout);
-        // Sign = -1 for p1, 1 for p0
-        W_CW_0[i] = payload[i] + levelSum * sign;
-        W_CW_1[i] = -payload[i] + levelSum * -sign;
-
+        cmp_tau_0[i] = (u8)(controlBitSum & 1);
+        cmp_tau_1[i] = (u8)((controlBitSum >> 1) & 1);
+    }
+    // Calculate [t]
+    cmp_2bit_opt(party_id, cmp_tau_1, cmp_tau_0, t, Bin, peer);
+    GroupElement sign(((party_id-2) == 1) ? 1 : -1, Bout);
+    // Sign = -1 for p1, 1 for p0
+    for (int i = 0; i < Bin; i++){
+        W_CW_0[i] = payload[i] + levelSum[i] * sign;
+        W_CW_1[i] = -payload[i] + levelSum[i] * -sign;
     }
     multiplexer2(party_id, t, W_CW_0, W_CW_1, W_CW, (int32_t)Bin, peer);
     reconstruct((int32_t)Bin, W_CW, Bout);
@@ -693,7 +700,7 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
 void evalDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &key, bool masked){
     // Eval of 2pc-dpf
     // Initialize with the root node
-    std::cout << "==========Eval==========" << std::endl;
+    //std::cout << "==========Eval==========" << std::endl;
     osuCrypto::AES AESInstance;
 
     // Parse DCF Key
@@ -721,7 +728,7 @@ void evalDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &k
 
     // Start evaluation
     for (int i = 0; i < Bin; i++){
-        std::cout << "Current level nodes : " << std::endl;
+        //std::cout << "Current level nodes : " << std::endl;
         std::cout << levelNodes << ", " << (int)controlBit << std::endl;
         AESInstance.setKey(levelNodes);
         AESInstance.ecbEncTwoBlocks(pt, ct);
@@ -734,7 +741,7 @@ void evalDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &k
             levelNodes = ct[(int)(idx[i])];
             controlBit = lsb(ct[(int)(idx[i])]);
         }
-        std::cout << "Next level nodes : " << levelNodes << ", " << (int)controlBit << std::endl;
+       // std::cout << "Next level nodes : " << levelNodes << ", " << (int)controlBit << std::endl;
     }
 
     // At the final stage, we make the convert from output in Z_2 to Z_n
@@ -757,8 +764,8 @@ void evalDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &k
         }
     }
      */
-    std::cout << "Converted = " << *convert_res << std::endl;
-    std::cout << "WCW = " << wcw[0].value << std::endl;
+    //std::cout << "Converted = " << *convert_res << std::endl;
+    //std::cout << "WCW = " << wcw[0].value << std::endl;
     res[0] = (wcw[0] * (uint64_t) controlBit + *convert_res) * sign;
 
     delete convert_res;
@@ -859,7 +866,7 @@ void evalDPF(int party, GroupElement *res, GroupElement *idx, DPFKeyPack *keyLis
 #pragma omp critical
             {
                 AESInstances[j].setKey(levelNodes[j]);
-                AESInstances[j].ecbEncTwoBlocks(pt, ct + 2 * i * sizeof(block));
+                AESInstances[j].ecbEncTwoBlocks(pt, ct + 2 * j * sizeof(block));
                 levelCW[j] = scw[j][i + 1];
                 level_tau[j] = tau[j][2 * i + (int)(idx[j][i])];
                 if (controlBit[j] == (u8)1){

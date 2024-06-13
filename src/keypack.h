@@ -78,6 +78,21 @@ struct iDCFKeyPack{
     iDCFKeyPack() {}
 };
 
+struct newDCFKeyPack{
+    int Bin, Bout;
+    block* k;
+    GroupElement* g;
+    u8* v;
+    newDCFKeyPack(int Bin, int Bout, block* k, GroupElement* g, u8* v): Bin(Bin), Bout(Bout), k(k), g(g), v(v) {}
+    newDCFKeyPack() {}
+};
+
+inline void freeNewDCFKeyPack(newDCFKeyPack key){
+    delete[] key.k;
+    delete[] key.g;
+    delete[] key.v;
+}
+
 inline void freeDCFKeyPack(DCFKeyPack &key){
     delete[] key.k;
     delete[] key.g;

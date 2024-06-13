@@ -22,7 +22,7 @@ SineKeyPack sine_offline(int party_id, int Bin, int Bout, int scale, bool using_
         output.approx_deg = -1;
         // create dig dec keys
         output.DigDecKey = digdec_offline(party_id, scale - 1, digdec_new_bitsize);
-        int digdec_segNum = (scale - 1) / digdec_new_bitsize + (((scale - 1) % digdec_new_bitsize == 0) ? 1 : 0);
+        int digdec_segNum = (scale - 1) / digdec_new_bitsize + (((scale - 1) % digdec_new_bitsize == 0) ? 0 : 1);
         DPFKeyPack* EvalAllKeyList = new DPFKeyPack[digdec_segNum];
         for (int i = 0; i < digdec_segNum; i++){
             // Here we need random idx at r, which do not require mask because it was used in EvalAll.
@@ -38,7 +38,7 @@ SineKeyPack sine_offline(int party_id, int Bin, int Bout, int scale, bool using_
         }
     }else{
         // Note: this new bitsize is used for truncation, not digdec!
-        assert((scale - 1) / digdec_new_bitsize == approx_segNum);
+        // assert((scale - 1) / digdec_new_bitsize == approx_segNum);
         output.digdec_new_bitsize = digdec_new_bitsize;
         output.approx_segNum = approx_segNum;
         output.approx_deg = approx_deg;
@@ -124,7 +124,7 @@ GroupElement sine(int party_id, GroupElement input, SineKeyPack key){
     if (key.using_lut){
         // Call digdec first
         int digdec_segNum = (key.scale - 1) / key.digdec_new_bitsize +
-                (((key.scale - 1) % key.digdec_new_bitsize == 0) ? 1 : 0);
+                (((key.scale - 1) % key.digdec_new_bitsize == 0) ? 0 : 1);
         GroupElement* x_seg = new GroupElement[digdec_segNum];
         digdec(party_id, x_frac, x_seg, key.digdec_new_bitsize, key.DigDecKey);
         // For each segment, call lut, x_seg 0 is the lowest segment

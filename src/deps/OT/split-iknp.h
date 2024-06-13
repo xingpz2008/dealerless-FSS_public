@@ -746,6 +746,8 @@ public:
       pack_cot_messages(y, corr_data, corrected_y_size, corrected_bsize,
                         this->l);
       io->send_data(y, sizeof(uint64_t) * (corrected_y_size));
+        //std::cout << "COT post, i = " << i << ", length = " << length <<
+                  //", corrected_recvd_size = " << corrected_y_size << std::endl;
     }
     delete[] qT;
   }
@@ -762,8 +764,10 @@ public:
 
     for (int i = 0; i < length; i += bsize) {
       corrected_recvd_size =
-          (uint32_t)ceil((std::min(bsize, length - i) * this->l) / (float(64)));
+          (uint32_t)ceil((std::min(bsize, length - i) * this->l) / ((float)sizeof(uint64_t) * 8));
       corrected_bsize = std::min(bsize, length - i);
+      //std::cout << "COT post, i = " << i << ", length = " << length <<
+      //", corrected_recvd_size = " << corrected_recvd_size << std::endl;
       io->recv_data(recvd, sizeof(uint64_t) * corrected_recvd_size);
       if (bsize <= length - i)
         crh.H<bsize>(tT + i, tT + i);

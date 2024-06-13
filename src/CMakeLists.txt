@@ -49,7 +49,8 @@ add_library(fss STATIC
     input_prng.cpp
         2pcwrapper.cpp
     2pc_api.cpp
-    2pc_math.cpp)
+    2pc_math.cpp
+    2pc_cleartext.cpp)
 
 find_package(Threads REQUIRED)
 
@@ -129,6 +130,7 @@ install(FILES
         "2pcwrapper.h"
         "2pc_api.h"
         "2pc_math.h"
+        "2pc_cleartext.h"
         DESTINATION include)
 
 install(DIRECTORY

@@ -8,8 +8,8 @@
 #include<iostream>
 
 int party_instance = 0;
-int Bin = 3;
-int Bout = 3;
+int Bin = 8;
+int Bout = 8;
 
 using namespace sci;
 using namespace std;
@@ -35,7 +35,8 @@ int main(int argc, char **argv){
     amap.arg("p", port, "Port Number");
     amap.arg("b", choice_bit, "Choice bit");
     amap.arg("v", verbose, "Verbose");
-    amap.arg("l", length, "Arr length");
+    amap.arg("i", Bin, "bit length in");
+    amap.arg("o", Bout, "bit length");
     amap.parse(argc, argv);
 
     GroupElement x = GroupElement(2, Bin);
@@ -52,39 +53,62 @@ int main(int argc, char **argv){
     auto start = std::chrono::high_resolution_clock::now();
     auto end = std::chrono::high_resolution_clock::now();
     auto dpf_duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    uint64_t init_byte, rounds;
+    uint64_t mid_byte, mid_rounds;
 
     if(party==CLIENT){
         cout << "Client execution. Payload.value = " << payload.value << endl;
         //client = new Peer(address, port);
         server = new Peer(address, port);
         peer = server;
+        init_byte = peer->bytesSent;
+        rounds = peer->rounds;
         start = std::chrono::high_resolution_clock::now();
-        DPFKeyPack key(keyGenDPF(party, Bin, Bout, GroupElement(1, Bin), payload));
-        evalDPF(party, res, x, key);
+        newDCFKeyPack key(keyGenNewDCF(party, Bin, Bout, GroupElement(1, Bin), payload));
+        //DPFKeyPack key(keyGenDPF(party, Bin, Bout, GroupElement(1, Bin), payload));
+        //iDCFKeyPack idcf_key(keyGeniDCF(party, Bin, Bout, GroupElement(1, Bin), &payload));
+        mid_byte = peer->bytesSent;
+        mid_rounds = peer->rounds;
+        std::cout << "============Online start========="<<std::endl;
+        evalNewDCF(party, res, &x, &key, 1, Bin);
+        //evalDPF(party, res, x, key);
+        //evaliDCF(party, &idcf_res, x, idcf_key);
         end = std::chrono::high_resolution_clock::now();
-        dpf_duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-        DPFKeyPack ikey(keyGeniDPF(party, Bin, Bout, GroupElement(2, Bin), payload_list));
-        evaliDPF(party, ires, x, ikey);
-        iDCFKeyPack idcf_key(keyGeniDCF(party, Bin, Bout, GroupElement(1, Bin), &payload));
-        evaliDCF(party, &idcf_res, x, idcf_key);
+        //dpf_duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+        //DPFKeyPack ikey(keyGeniDPF(party, Bin, Bout, GroupElement(2, Bin), payload_list));
+        //evaliDPF(party, ires, x, ikey);
+        //iDCFKeyPack idcf_key(keyGeniDCF(party, Bin, Bout, GroupElement(1, Bin), &payload));
+        //evaliDCF(party, &idcf_res, x, idcf_key);
     }
     else{
         cout << "Server execution, Payload.value = " << payload.value<< endl;
         //server = new Peer(address, port);
         client = waitForPeer(port);
         peer = client;
+        init_byte = peer->bytesSent;
+        rounds = peer->rounds;
         start = std::chrono::high_resolution_clock::now();
-        DPFKeyPack key(keyGenDPF(party, Bin, Bout, GroupElement(2, Bin), payload));
-        evalDPF(party, res, x, key);
+        newDCFKeyPack key(keyGenNewDCF(party, Bin, Bout, GroupElement(1, Bin), payload));
+        //DPFKeyPack key(keyGenDPF(party, Bin, Bout, GroupElement(2, Bin), payload));
+        //iDCFKeyPack idcf_key(keyGeniDCF(party, Bin, Bout, GroupElement(1, Bin), &payload));
+        mid_byte = peer->bytesSent;
+        mid_rounds = peer->rounds;
+        std::cout << "============Online start========="<<std::endl;
+        evalNewDCF(party, res, &x, &key, 1, Bin);
+        //evalDPF(party, res, x, key);
+        //evaliDCF(party, &idcf_res, x, idcf_key);
         end = std::chrono::high_resolution_clock::now();
-        dpf_duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-        DPFKeyPack ikey(keyGeniDPF(party, Bin, Bout, GroupElement(1, Bin), payload_list));
-        evaliDPF(party, ires, x, ikey);
-        iDCFKeyPack idcf_key(keyGeniDCF(party, Bin, Bout, GroupElement(1, Bin), &payload));
-        evaliDCF(party, &idcf_res, x, idcf_key);
+        //dpf_duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+        //DPFKeyPack ikey(keyGeniDPF(party, Bin, Bout, GroupElement(1, Bin), payload_list));
+        //evaliDPF(party, ires, x, ikey);
+        //iDCFKeyPack idcf_key(keyGeniDCF(party, Bin, Bout, GroupElement(1, Bin), &payload));
+        //evaliDCF(party, &idcf_res, x, idcf_key);
     }
+    std::cout << "Init (Bytes, Rounds) = " << init_byte << ", " << rounds << std::endl;
+    std::cout << "Offline (Bytes, Rounds) = " << (mid_byte - init_byte)/(float)1000 << ", " << mid_rounds - rounds << std::endl;
+    std::cout << "Online (Bytes, Rounds) = " << (peer->bytesSent - mid_byte)/(float)1000 << ", " << peer->rounds - mid_rounds << std::endl;
 
-
+    /*
     auto final_end = std::chrono::high_resolution_clock::now();
     auto final_duration = std::chrono::duration_cast<std::chrono::microseconds>(final_end - end).count();
     std::cout << "(DPF) Party " << party << " :" << "Time = " << dpf_duration << std::endl;
@@ -96,5 +120,6 @@ int main(int argc, char **argv){
     }
     std::cout << std::endl;
     std::cout << "iDCF Res: " << idcf_res.value << std::endl;
+     */
     return 0;
 }

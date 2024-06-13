@@ -579,23 +579,27 @@ void create_sub_lut(int function, int Bin, int Bout, int scale, int segNum, Grou
     // sine 0 cosine 1 tangent 2
     int lut_len = 1 << (Bin / segNum);
     for (int i = 0; i < segNum; i++){
+        std::cout << "===========" << std::endl;
         for (int j = 0; j < lut_len; j++){
             switch (function) {
                 case 0:{
-                    float interval = 0.5 / (segNum * lut_len);
-                    lut[i][j] = GroupElement(sin(j * (1 << (Bin / segNum)) * interval * (2 * acos(0.0))),
+                    // lut 0 is low bit result
+                    float interval = 0.25 / (segNum * lut_len);
+                    float idx = (j << (i * Bin / segNum)) / (float)(1 << scale);
+                    lut[i][j] = GroupElement(sin((j << (i * Bin / segNum)) / (float)(1 << scale) * (M_PI)),
                                              Bout, scale);
+                    std::cout << "i = " << i << ", j = " << j << ", Generating sin(" << idx << " * Pi)" << std::endl;
                     break;
                 }
                 case 1:{
-                    float interval = 0.5 / (segNum * lut_len);
-                    lut[i][j] = GroupElement(cos(j * interval * (1 << (Bin / segNum)) * (2 * acos(0.0))),
+                    float interval = 0.25 / (segNum * lut_len);
+                    lut[i][j] = GroupElement(cos((j << (i * Bin / segNum)) / (float)(1 << scale) * (M_PI)),
                                              Bout, scale);
                     break;
                 }
                 case 2:{
-                    float interval = 0.5 / (segNum * lut_len);
-                    lut[i][j] = GroupElement(tan(j * interval * (1 << (Bin / segNum)) * (2 * acos(0.0))),
+                    float interval = 0.25 / (segNum * lut_len);
+                    lut[i][j] = GroupElement(tan((j << (i * Bin / segNum)) / (float)(1 << scale) * (M_PI)),
                                              Bout, scale);
                     break;
                 }

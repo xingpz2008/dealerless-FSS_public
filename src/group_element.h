@@ -316,3 +316,10 @@ inline std::pair<GroupElement, GroupElement> segment(const GroupElement x, int l
     return std::make_pair(high, low);
 }
 
+inline GroupElement scale_mult(GroupElement a, GroupElement b, int scale){
+    GroupElement c;
+    c.bitsize = a.bitsize;
+    c.value = (a.value * b.value) >> scale;
+    mod(c);
+    return c;
+}
