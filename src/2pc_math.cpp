@@ -97,15 +97,20 @@ SineKeyPack sine_offline(int party_id, int Bin, int Bout, int scale, bool using_
 GroupElement sine(int party_id, GroupElement input, SineKeyPack key){
     // This is the implementation of sine pi * x
     GroupElement output(0, input.bitsize);
+    std::cout << "[Beacon]" << std::endl;
     GroupElement x_ = segment(input, key.scale + 2).second;
     GroupElement x_mod = modular(party_id, x_, (2 * key.scale % (1ULL<<input.bitsize)), key.ModKey);
+    std::cout << "[Beacon]" << std::endl;
     GroupElement* v = new GroupElement[4];
     containment(party_id, x_mod, v, 3, key.CtnKey);
+    std::cout << "[Beacon]" << std::endl;
     GroupElement* transform_coefficients = new GroupElement[3 * 4];
     for (int i = 0; i < 12; i++){
         transform_coefficients[i].bitsize = key.scale + 2;
     }
+    std::cout << "[Beacon]" << std::endl;
     create_approx_spline(0000, key.scale + 2, key.scale, transform_coefficients);
+    std::cout << "[Beacon]" << std::endl;
     // Compute coefficients
     GroupElement m[3];
     for (int i = 0; i < 3; i++){

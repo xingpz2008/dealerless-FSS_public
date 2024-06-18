@@ -21,9 +21,9 @@ SOFTWARE.
 
 #ifndef MILLIONAIRE_H__
 #define MILLIONAIRE_H__
-#include "Millionaire/bit-triple-generator.h"
-#include "OT/emp-ot.h"
-#include "utils/emp-tool.h"
+#include "bit-triple-generator.h"
+#include "../OT/emp-ot.h"
+#include "../utils/emp-tool.h"
 #include <cmath>
 #include <omp.h>
 

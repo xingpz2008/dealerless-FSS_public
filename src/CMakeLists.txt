@@ -89,7 +89,7 @@ target_link_libraries(fss PRIVATE "/usr/local/lib64/libssl.so")
 
 
 
-target_compile_options(fss PRIVATE -std=c++17 -mcpu=native -Wno-parentheses-equality -Wno-ignored-attributes -maes -msse2 -msse4.1 -mpclmul -fPIC -no-pie)
+target_compile_options(fss PRIVATE -std=c++17 -mcpu=native -Wno-parentheses-equality -Wno-ignored-attributes -maes -msse2 -msse4.1 -mpclmul -fPIC -no-pie -fopenmp)
 # origin
 # target_compile_options(fss PRIVATE -std=c++17 -march=native -Wno-parentheses-equality -Wno-ignored-attributes -maes -msse2 -msse4.1 -mpclmul -fPIC -no-pie)
 
@@ -136,6 +136,7 @@ install(FILES
 install(DIRECTORY
     "deps/cryptoTools/cryptoTools"
     "deps/OT"
+    "deps/Millionaire"
     "deps/utils"
     DESTINATION include)
         

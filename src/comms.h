@@ -30,6 +30,7 @@ SOFTWARE.
 #include "deps/OT/ot_pack.h"
 #include "deps/cryptoTools/cryptoTools/Common/Defines.h"
 #include "deps/Millionaire/bit-triple-generator.h"
+#include "deps/Millionaire/millionaire.h"
 
 #include "deps/OT/split-iknp.h"
 #include "deps/OT/iknp.h"
@@ -62,6 +63,7 @@ public:
     uint64_t rounds = 0;
     sci::IOPack *iopack_;
     sci::OTPack *otpack;
+    MillionaireProtocol *MillInstance = NULL;
     //sci::IOPack *iopack_= new sci::IOPack(party, port);
     //sci::OTPack *otpack = new sci::OTPack(iopack_, party);
     //this->iopack = new sci::IOPack(party, port);
@@ -75,6 +77,9 @@ public:
         this->iopack_= new sci::IOPack(party-1, port);
         this->otpack = new sci::OTPack(this->iopack_, party-1);
         //std::cout << this->otpack->iopack->get_comm() << "Init finalized\n";
+        if (this->MillInstance == NULL){
+            this->MillInstance = new MillionaireProtocol(party - 1, iopack_, otpack);
+        }
     }
     Peer(std::string filename) {
         this->useFile = true;
@@ -95,6 +100,10 @@ public:
     void recv_u8(u8* output, int size);
 
     void send_u64(const uint64_t &b);
+
+    void send_u64(uint64_t* input, int size);
+
+    void recv_u64(uint64_t* output, int size);
 
     uint64_t recv_u64();
 
@@ -157,6 +166,18 @@ public:
     void send_cot(GroupElement* data, GroupElement* output, int length, bool using_aux_iknp);
 
     void recv_cot(GroupElement* recv_arr, int size, uint8_t* sel, bool using_aux_iknp);
+
+    void mill(uint8_t *res, uint64_t *data, int num_cmps, int bitlength,
+              bool greater_than = true, bool equality = false, int radix_base = MILL_PARAM);
+
+    void mill(uint8_t *res, uint64_t *dataA, uint64_t* dataB, int num_cmps, int bitlength,
+              bool greater_than = true, bool equality = false, int radix_base = MILL_PARAM);
+
+    void mill(uint8_t *res, GroupElement *data, int num_cmps,
+              bool greater_than = true, bool equality = false, int radix_base = MILL_PARAM);
+
+    void mill(uint8_t *res, GroupElement* dataA, GroupElement* dataB, int num_cmps,
+              bool greater_than = true, bool equality = false, int radix_base = MILL_PARAM);
 
 };
 

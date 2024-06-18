@@ -5,6 +5,7 @@
 #include "../../src/group_element.h"
 #include "../../src/ArgMapping.h"
 #include "../../src/2pc_dcf.h"
+#include "../../src/2pc_api.h"
 #include<iostream>
 
 int party_instance = 0;
@@ -64,13 +65,15 @@ int main(int argc, char **argv){
         init_byte = peer->bytesSent;
         rounds = peer->rounds;
         start = std::chrono::high_resolution_clock::now();
-        newDCFKeyPack key(keyGenNewDCF(party, Bin, Bout, GroupElement(1, Bin), payload));
+        ComparisonKeyPack key = comparison_offline(party, Bin, Bout, GroupElement(1, Bin), &payload);
+        //newDCFKeyPack key(keyGenNewDCF(party, Bin, Bout, GroupElement(1, Bin), payload));
         //DPFKeyPack key(keyGenDPF(party, Bin, Bout, GroupElement(1, Bin), payload));
         //iDCFKeyPack idcf_key(keyGeniDCF(party, Bin, Bout, GroupElement(1, Bin), &payload));
         mid_byte = peer->bytesSent;
         mid_rounds = peer->rounds;
         std::cout << "============Online start========="<<std::endl;
-        evalNewDCF(party, res, &x, &key, 1, Bin);
+        comparison(party, res, &x, &key, 1, Bin);
+        //evalNewDCF(party, res, &x, &key, 1, Bin);
         //evalDPF(party, res, x, key);
         //evaliDCF(party, &idcf_res, x, idcf_key);
         end = std::chrono::high_resolution_clock::now();
@@ -88,13 +91,13 @@ int main(int argc, char **argv){
         init_byte = peer->bytesSent;
         rounds = peer->rounds;
         start = std::chrono::high_resolution_clock::now();
-        newDCFKeyPack key(keyGenNewDCF(party, Bin, Bout, GroupElement(1, Bin), payload));
+        ComparisonKeyPack key(comparison_offline(party, Bin, Bout, GroupElement(1, Bin), &payload));
         //DPFKeyPack key(keyGenDPF(party, Bin, Bout, GroupElement(2, Bin), payload));
         //iDCFKeyPack idcf_key(keyGeniDCF(party, Bin, Bout, GroupElement(1, Bin), &payload));
         mid_byte = peer->bytesSent;
         mid_rounds = peer->rounds;
         std::cout << "============Online start========="<<std::endl;
-        evalNewDCF(party, res, &x, &key, 1, Bin);
+        comparison(party, res, &x, &key, 1, Bin);
         //evalDPF(party, res, x, key);
         //evaliDCF(party, &idcf_res, x, idcf_key);
         end = std::chrono::high_resolution_clock::now();
@@ -104,9 +107,9 @@ int main(int argc, char **argv){
         //iDCFKeyPack idcf_key(keyGeniDCF(party, Bin, Bout, GroupElement(1, Bin), &payload));
         //evaliDCF(party, &idcf_res, x, idcf_key);
     }
-    std::cout << "Init (Bytes, Rounds) = " << init_byte << ", " << rounds << std::endl;
-    std::cout << "Offline (Bytes, Rounds) = " << (mid_byte - init_byte)/(float)1000 << ", " << mid_rounds - rounds << std::endl;
-    std::cout << "Online (Bytes, Rounds) = " << (peer->bytesSent - mid_byte)/(float)1000 << ", " << peer->rounds - mid_rounds << std::endl;
+    std::cout << "Init (KBytes, Rounds) = " << init_byte << ", " << rounds << std::endl;
+    std::cout << "Offline (KBytes, Rounds) = " << (mid_byte - init_byte)/(float)1024 << ", " << mid_rounds - rounds << std::endl;
+    std::cout << "Online (KBytes, Rounds) = " << (peer->bytesSent - mid_byte)/(float)1024 << ", " << peer->rounds - mid_rounds << std::endl;
 
     /*
     auto final_end = std::chrono::high_resolution_clock::now();

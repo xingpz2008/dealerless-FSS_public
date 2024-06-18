@@ -108,7 +108,7 @@ public:
     length = padded_length(length);
     block128 q[block_size];
     qT = new block128[length];
-    //if (!setup)
+    if (!setup)
       setup_send();
 
     for (int j = 0; j < length / block_size; ++j) {
@@ -130,8 +130,10 @@ public:
     block128 t[block_size];
     tT = new block128[length];
 
-    //if (not setup)
-      setup_recv();
+    if (not setup){
+        setup_recv();
+    }
+
 
     bool *r2 = new bool[length];
     prg.random_bool(extended_r, block_size);

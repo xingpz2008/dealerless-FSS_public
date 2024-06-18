@@ -111,6 +111,10 @@ Peer::Peer(std::string ip, int port) {
     }
     iopack_ = new sci::IOPack(party-1, port);
     otpack = new sci::OTPack(iopack_, party-1);
+    if (MillInstance == NULL){
+        // Need to reconfigure bitlen when calling
+        MillInstance = new MillionaireProtocol(party - 1, iopack_, otpack);
+    }
     std::cerr << "connected" << "\n";
 }
 
@@ -295,6 +299,26 @@ u8 Peer::recv_u8(){
     bytesReceived += sizeof(u8);
     rounds++;
     return b;
+}
+
+void Peer::send_u64(uint64_t* input, int size) {
+    GroupElement* ge_list = new GroupElement[size];
+
+    for (int i = 0; i < size; i++){
+        ge_list[i].value = input[i];
+        ge_list[i].bitsize = 64;
+    }
+    send_batched_input(ge_list, size, 64);
+    delete[] ge_list;
+}
+
+void Peer::recv_u64(uint64_t* output, int size){
+    uint64_t* ge_list = new uint64_t[size];
+    recv_batched_input(ge_list, size, 64);
+    for (int i = 0; i < size; i++){
+        output[i] = ge_list[i];
+    }
+    delete[] ge_list;
 }
 
 void Peer::send_u64(const uint64_t &b){
@@ -673,92 +697,178 @@ GroupElement Peer::recv_input() {
 }
 
 void Peer::send_cot(uint64_t data, uint64_t* output, int length) {
-    uint64_t pre_comm = otpack->iopack->io->counter;
-    uint64_t pre_rounds = otpack->iopack->io->num_rounds;
+    //uint64_t pre_comm = otpack->iopack->io->counter;
+    //uint64_t pre_rounds = otpack->iopack->io->num_rounds;
+    uint64_t pre_comm = otpack->iknp_straight->io->counter;
+    uint64_t pre_rounds = otpack->iknp_straight->io->num_rounds;
     otpack->iknp_straight->send_cot(output, &data, length, 64);
-    rounds+= (otpack->iopack->io->num_rounds - pre_rounds);
-    std::cout << "In send u64 COT, bytes added by " << (otpack->iopack->io->counter - pre_comm) << std::endl;
-    std::cout << "[Send]Rounds added with COT for " << (otpack->iopack->io->num_rounds - pre_rounds) << " rounds with size " << length << std::endl;
-    bytesSent += (otpack->iopack->io->counter - pre_comm);
+    rounds+= (otpack->iknp_straight->io->num_rounds - pre_rounds);
+    std::cout << "In send u64 COT, bytes added by " << (otpack->iknp_straight->io->counter - pre_comm) << std::endl;
+    std::cout << "[Send]Rounds added with COT for " << (otpack->iknp_straight->io->num_rounds - pre_rounds) << " rounds with size " << length << std::endl;
+    bytesSent += (otpack->iknp_straight->io->counter - pre_comm);
 }
 
 void Peer::send_cot(GroupElement* data, GroupElement* output, int length, bool using_aux_iknp) {
-    uint64_t pre_comm = otpack->iopack->io->counter;
-    uint64_t pre_rounds = otpack->iopack->io->num_rounds;
+    uint64_t pre_comm = 0;
+    uint64_t pre_rounds = 0;
     uint64_t _output[length];
     uint64_t uint64_t_data[length];
     for (int i = 0; i < length; i++){
         uint64_t_data[i] = data[i].value;
     }
     if (using_aux_iknp){
+        pre_comm = otpack->iknp_reversed->io->counter;
+        pre_rounds = otpack->iknp_reversed->io->num_rounds;
         otpack->iknp_reversed->send_cot(_output, uint64_t_data, length, data->bitsize);
+        rounds += (otpack->iknp_reversed->io->num_rounds - pre_rounds);
+        bytesSent += (otpack->iknp_reversed->io->counter - pre_comm);
+        std::cout << "In send batched GE COT (iknp-r), bytes added by " << (otpack->iknp_reversed->io->counter - pre_comm) << std::endl;
+        std::cout << "[Send]Rounds added with COT (iknp-r) for " << (otpack->iknp_reversed->io->num_rounds - pre_rounds) << " rounds with size " << length << std::endl;
     }else{
+        pre_comm = otpack->iknp_straight->io->counter;
+        pre_rounds = otpack->iknp_straight->io->num_rounds;
         otpack->iknp_straight->send_cot(_output, uint64_t_data, length, data->bitsize);
+        rounds += (otpack->iknp_straight->io->num_rounds - pre_rounds);
+        bytesSent += (otpack->iknp_straight->io->counter - pre_comm);
+        std::cout << "In send batched GE COT (iknp-s), bytes added by " << (otpack->iknp_straight->io->counter - pre_comm) << std::endl;
+        std::cout << "[Send]Rounds added with COT (iknp-s) for " << (otpack->iknp_straight->io->num_rounds - pre_rounds) << " rounds with size " << length << std::endl;
     }
     for (int i = 0; i < length; i++){
         //std::cout << "In send_cot, " << i << "th output for sender is " << _output[i]%(1ULL<<data->bitsize) << " with input " << data->value%(1ULL<<data->bitsize)<< std::endl;
         output[i].value = _output[i];
         output[i].bitsize = data->bitsize;
     }
-    rounds += (otpack->iopack->io->num_rounds - pre_rounds);
-    std::cout << "In send batched GE COT, bytes added by " << (otpack->iopack->io->counter - pre_comm) << std::endl;
-    std::cout << "[Send]Rounds added with COT for " << (otpack->iopack->io->num_rounds - pre_rounds) << " rounds with size " << length << std::endl;
-    bytesSent += (otpack->iopack->io->counter - pre_comm);
 }
 
 void Peer::recv_cot(uint64_t* recv_arr, int size, uint8_t* sel){
-    uint64_t pre_comm = otpack->iopack->io->counter;
-    uint64_t pre_rounds = otpack->iopack->io->num_rounds;
+    uint64_t pre_comm = otpack->iknp_straight->io->counter;
+    uint64_t pre_rounds = otpack->iknp_straight->io->num_rounds;
     otpack->iknp_straight->recv_cot(recv_arr, (bool*)sel, size, 64);
-    rounds += (otpack->iopack->io->num_rounds - pre_rounds);
-    std::cout << "In recv batched u64 COT, bytes added by " << (otpack->iopack->io->counter - pre_comm) << std::endl;
-    std::cout << "[Recv]Rounds added with COT for " << (otpack->iopack->io->num_rounds - pre_rounds) << " rounds with size " << size << std::endl;
-    bytesSent += (otpack->iopack->io->counter - pre_comm);
+    rounds += (otpack->iknp_straight->io->num_rounds - pre_rounds);
+    std::cout << "In recv batched u64 COT, bytes added by " << (otpack->iknp_straight->io->counter - pre_comm) << std::endl;
+    std::cout << "[Recv]Rounds added with COT for " << (otpack->iknp_straight->io->num_rounds - pre_rounds) << " rounds with size " << size << std::endl;
+    bytesSent += (otpack->iknp_straight->io->counter - pre_comm);
 }
 
 void Peer::recv_cot(GroupElement* recv_arr, int size, uint8_t* sel, bool using_aux_iknp){
-    uint64_t pre_comm = otpack->iopack->io->counter;
-    uint64_t pre_rounds = otpack->iopack->io->num_rounds;
+    uint64_t pre_comm = 0;
+    uint64_t pre_rounds = 0;
     uint64_t recv_value_arr[size];
     if (using_aux_iknp){
+        pre_comm = otpack->iknp_reversed->io->counter;
+        pre_rounds = otpack->iknp_reversed->io->num_rounds;
         otpack->iknp_reversed->recv_cot(recv_value_arr, (bool*)sel, size, recv_arr->bitsize);
+        rounds += (otpack->iknp_reversed->io->num_rounds - pre_rounds);
+        bytesSent += (otpack->iknp_reversed->io->counter - pre_comm);
+        std::cout << "In recv batched GE COT (iknp-r), bytes added by " << (otpack->iknp_reversed->io->counter - pre_comm) << std::endl;
+        std::cout << "[Recv]Rounds added with COT (iknp-r) for " << (otpack->iknp_reversed->io->num_rounds - pre_rounds) << " rounds with size " << size << std::endl;
     }else{
+        pre_comm = otpack->iknp_straight->io->counter;
+        pre_rounds = otpack->iknp_straight->io->num_rounds;
         otpack->iknp_straight->recv_cot(recv_value_arr, (bool*)sel, size, recv_arr->bitsize);
+        rounds += (otpack->iknp_straight->io->num_rounds - pre_rounds);
+        bytesSent += (otpack->iknp_straight->io->counter - pre_comm);
+        std::cout << "In recv batched GE COT (iknp-s), bytes added by " << (otpack->iknp_straight->io->counter - pre_comm) << std::endl;
+        std::cout << "[Recv]Rounds added with COT (iknp-s) for " << (otpack->iknp_straight->io->num_rounds - pre_rounds) << " rounds with size " << size << std::endl;
     }
     // peer->sync();
     for (int i = 0; i < size; i++){
         //std::cout << "In recv_cot, " << i << "th output for receiver is " << recv_value_arr[i] %(recv_arr[0].bitsize)<< std::endl;
         recv_arr[i].value = recv_value_arr[i];
     }
-    rounds += (otpack->iopack->io->num_rounds - pre_rounds);
-    std::cout << "In recv batched GE COT, bytes added by " << (otpack->iopack->io->counter - pre_comm) << std::endl;
-    std::cout << "[Recv]Rounds added with COT for " << (otpack->iopack->io->num_rounds - pre_rounds) << " rounds with size " << size << std::endl;
-    bytesSent += (otpack->iopack->io->counter - pre_comm);
     return;
 }
 
 void Peer::send_cot(osuCrypto::block input, osuCrypto::block* output, int size){
     //std::cout << "Send beacon 1\n" ;
-    uint64_t pre_comm =otpack->iopack->get_comm();
+    uint64_t pre_comm =otpack->iknp->io->counter;
     //std::cout << "Send beacon 1.1\n" ;
-    uint64_t pre_rounds = otpack->iopack->get_rounds();
+    uint64_t pre_rounds = otpack->iknp->io->num_rounds;
     //std::cout << "Send beacon 2\n";
     otpack->iknp->send_cot(output, input, size);
-    rounds += (otpack->iopack->io->num_rounds - pre_rounds);
-    std::cout << "In send btached block COT, bytes added by " << (otpack->iopack->io->counter - pre_comm) << std::endl;
-    std::cout << "[Send]Rounds added with COT for " << (otpack->iopack->io->num_rounds - pre_rounds) << " rounds with size " << size << std::endl;
-    bytesSent += (otpack->iopack->io->counter - pre_comm);
+    rounds += (otpack->iknp->io->num_rounds - pre_rounds);
+    std::cout << "In send btached block COT, bytes added by " << (otpack->iknp->io->counter - pre_comm) << std::endl;
+    std::cout << "[Send]Rounds added with COT for " << (otpack->iknp->io->num_rounds - pre_rounds) << " rounds with size " << size << std::endl;
+    bytesSent += (otpack->iknp->io->counter - pre_comm);
     //std::cout<< "Send beacon 3\n";
 }
 
 void Peer::recv_cot(osuCrypto::block* recv_arr, int size, bool* sel){
-    uint64_t pre_comm = otpack->iopack->io->counter;
-    uint64_t pre_rounds = otpack->iopack->io->num_rounds;
+    uint64_t pre_comm = otpack->iknp->io->counter;
+    uint64_t pre_rounds = otpack->iknp->io->num_rounds;
     otpack->iknp->recv_cot(recv_arr, sel, size);
-    rounds += (otpack->iopack->io->num_rounds - pre_rounds);
-    std::cout << "In recv block COT, bytes added by " << (otpack->iopack->io->counter - pre_comm) << std::endl;
-    std::cout << "[Recv]Rounds added with COT for " << (otpack->iopack->io->num_rounds - pre_rounds) << " rounds with size " << size << std::endl;
-    bytesSent += (otpack->iopack->io->counter - pre_comm);
+    rounds += (otpack->iknp->io->num_rounds - pre_rounds);
+    std::cout << "In recv block COT, bytes added by " << (otpack->iknp->io->counter - pre_comm) << std::endl;
+    std::cout << "[Recv]Rounds added with COT for " << (otpack->iknp->io->num_rounds - pre_rounds) << " rounds with size " << size << std::endl;
+    bytesSent += (otpack->iknp->io->counter - pre_comm);
+}
+
+void Peer::mill(uint8_t *res, uint64_t *data, int num_cmps, int bitlength,
+          bool greater_than, bool equality, int radix_base){
+    MillInstance->configure(bitlength, radix_base);
+    uint64_t pre_com_kkot = MillInstance->otpack->kkot[MillInstance->beta - 1]->io->counter;
+    uint64_t pre_round_kkot = MillInstance->otpack->kkot[MillInstance->beta - 1]->io->num_rounds;
+    uint64_t pre_com_iknp_s = MillInstance->otpack->iknp_straight->io->counter;
+    uint64_t pre_round_iknp_s = MillInstance->otpack->iknp_straight->io->num_rounds;
+    MillInstance->compare(res, data, num_cmps, bitlength, greater_than, equality, radix_base);
+    uint64_t delta_com_kkot = MillInstance->otpack->kkot[MillInstance->beta - 1]->io->counter - pre_com_kkot;
+    uint64_t delta_round_kkot = MillInstance->otpack->kkot[MillInstance->beta - 1]->io->num_rounds - pre_round_kkot;
+    uint64_t delta_com_iknp_s = MillInstance->otpack->iknp_straight->io->counter - pre_com_iknp_s;
+    uint64_t delta_round_iknp_s = MillInstance->otpack->iknp_straight->io->num_rounds - pre_round_iknp_s;
+    std::cout << "In F_Mill, bytes added by " << delta_com_kkot + delta_com_iknp_s << std::endl;
+    std::cout << "In F_Mill, rounds added by " << delta_round_kkot + delta_round_iknp_s << std::endl;
+    rounds += (delta_round_iknp_s + delta_round_kkot);
+    bytesSent += (delta_com_iknp_s + delta_com_kkot);
+}
+
+void Peer::mill(uint8_t *res, uint64_t *dataA, uint64_t* dataB, int num_cmps, int bitlength,
+          bool greater_than, bool equality, int radix_base){
+    // Send a-b to another one
+    uint64_t* dataC = new uint64_t[num_cmps];
+    uint64_t mask = 1ULL << bitlength;
+    for (int i = 0; i < num_cmps; i++){
+        dataC[i] = (dataA[i] - dataB[i]) % mask;
+    }
+    if ((party - 2) == 0){
+        send_u64(dataC, num_cmps);
+        for (int i = 0; i < num_cmps; i++){
+            dataC[i] = 0;
+        }
+    }else{
+        uint64_t* data_tmp = new uint64_t[num_cmps];
+        recv_u64(data_tmp, num_cmps);
+        for (int i = 0; i < num_cmps; i++){
+            dataC[i] = (dataC[i] + data_tmp[i]) % mask;
+        }
+        delete[] data_tmp;
+    }
+    mill(res, dataC, num_cmps, bitlength, greater_than, equality, radix_base);
+    delete[] dataC;
+}
+
+void Peer::mill(uint8_t *res, GroupElement *data, int num_cmps,
+          bool greater_than, bool equality, int radix_base){
+    uint64_t* u64data = new uint64_t[num_cmps];
+    int bitlen = data->bitsize;
+    for (int i = 0; i < num_cmps; i++){
+        u64data[i] = data[i].value;
+    }
+    mill(res, u64data, num_cmps, bitlen, greater_than, equality, radix_base);
+    delete[] u64data;
+}
+
+void Peer::mill(uint8_t *res, GroupElement *dataA, GroupElement* dataB, int num_cmps,
+                bool greater_than, bool equality, int radix_base){
+    uint64_t* u64dataA = new uint64_t[num_cmps];
+    uint64_t* u64dataB = new uint64_t[num_cmps];
+    int bitlen = dataA->bitsize;
+    for (int i = 0; i < num_cmps; i++){
+        u64dataA[i] = dataA[i].value;
+        u64dataB[i] = dataB[i].value;
+    }
+    mill(res, u64dataA, u64dataB, num_cmps, bitlen, greater_than, equality, radix_base);
+    delete[] u64dataA;
+    delete[] u64dataB;
 }
 
 Dealer::Dealer(std::string ip, int port) {

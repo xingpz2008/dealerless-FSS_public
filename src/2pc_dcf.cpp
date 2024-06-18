@@ -532,14 +532,16 @@ void evalNewDCF(int party, GroupElement* res, GroupElement* idx, newDCFKeyPack* 
     GroupElement V[size];
     osuCrypto::AES AESInstance[size];
     block levelNodes[size];
-    uint64_t converted_val[size];
-    block null_block[size];
+    uint64_t* converted_val = new uint64_t[size];
+    block* null_block = new block[size];
+    //uint64_t converted_val[size];
+    //block null_block[size];
 
     static const block notOneBlock = osuCrypto::toBlock(~0, ~1);
     static const block notThreeBlock = osuCrypto::toBlock(~0, ~3);
     static const block ThreeBlock = osuCrypto::toBlock(~0, 3);
     const static block pt[4] = {ZeroBlock, OneBlock, notThreeBlock, ThreeBlock};
-    block ct[4 * size];
+    block* ct = new block[4 * size];
 
     // Init all variables
     for (int i = 0; i < size; i++){
@@ -557,12 +559,11 @@ void evalNewDCF(int party, GroupElement* res, GroupElement* idx, newDCFKeyPack* 
 
     // Body iteration
     for (int i = 0; i < max_bitsize; i++) {
-#pragma omp parallel for
+
         for (int j = 0; j < size; j++) {
-#pragma omp critical
-            {
+
                 AESInstance[j].setKey(levelNodes[j]);
-                AESInstance[j].ecbEncFourBlocks(pt, ct + 4 * j * sizeof(block));
+                AESInstance[j].ecbEncFourBlocks(pt, &(ct[4 * j]));
                 if (idx[j][i] == (u8) 0) {
                     two_pc_convert(Bout[j], &(ct[j * 4 + 2]), &(converted_val[j]), &(null_block[j]));
                 } else {
@@ -578,7 +579,7 @@ void evalNewDCF(int party, GroupElement* res, GroupElement* idx, newDCFKeyPack* 
                     levelNodes[j] = ct[4 * j + (int) (idx[j][i])];
                     controlBit[j] = lsb(ct[4 * j + (int) (idx[j][i])]);
                 }
-            }
+
         }
     }
 
@@ -587,4 +588,8 @@ void evalNewDCF(int party, GroupElement* res, GroupElement* idx, newDCFKeyPack* 
         two_pc_convert(Bout[i], &(levelNodes[i]), &(converted_val[i]), &(null_block[i]));
         res[i] = V[i] + (((party - 2) == 0) ? 1 : (-1)) * (converted_val[i] + g_list[i][Bin[i]] * (uint64_t)controlBit[i]);
     }
+
+    delete[] converted_val;
+    delete[] null_block;
+    delete[] ct;
 }

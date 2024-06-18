@@ -4,6 +4,86 @@
 
 #include "2pc_api.h"
 
+ComparisonKeyPack comparison_offline(int party_id, int Bin, int Bout, GroupElement c, GroupElement* payload, bool public_payload = true){
+    // c -> input
+    // payload -> output
+    assert((Bin == c.bitsize) && (Bout == payload->bitsize));
+    ComparisonKeyPack key;
+    key.Bin = c.bitsize;
+    key.Bout = Bout;
+    prng.SetSeed(osuCrypto::toBlock(party_id, time(NULL)));
+    auto s = prng.get<int>();
+    GroupElement r(s, c.bitsize);
+    mod(r);
+    key.mask = r;
+
+    // Call F_Mill
+    uint8_t g = -1;
+    GroupElement g_(-1, Bout);
+    GroupElement r_plus_c = r + c;
+    peer->mill(&g, &r, &r_plus_c, 1);
+    B2A(party_id, &g, &g_, 1, Bout, peer);
+    key.correction = g_ * *payload;
+
+    if (!public_payload){
+        // Call F_mult
+        GroupElement g_A(-1, Bout);
+        GroupElement a(-1, Bout);
+        GroupElement b(-1, Bout);
+        GroupElement c(-1, Bout);
+        beaver_mult_offline(party_id, &a, &b, &c, peer, 1);
+        beaver_mult_online(party_id, *payload, g_, a, b, c, &g_A, peer);
+        key.correction = g_A;
+    }
+
+    // Invoke 2 DCFs
+    newDCFKeyPack* DCFKeyList = new newDCFKeyPack[2];
+    DCFKeyList[0] = keyGenNewDCF(party_id, Bin, Bout, r, -*(payload));
+    DCFKeyList[1] = keyGenNewDCF(party_id, Bin, Bout, r_plus_c, *payload);
+    key.DCFKeyList = DCFKeyList;
+
+    return key;
+}
+
+void comparison(int party_id, GroupElement* res, GroupElement idx, const ComparisonKeyPack key){
+    // Single comparison implementation
+    GroupElement real_idx = idx + key.mask;
+    reconstruct(&real_idx);
+    GroupElement* y = new GroupElement[2];
+    for (int i = 0; i < 2; i++){
+        y[i].bitsize = key.Bout;
+    }
+
+    evalNewDCF(party_id, y, &real_idx, key.DCFKeyList, 2, key.Bin);
+
+    *res = y[0] + y[1] + key.correction;
+
+    delete[] y;
+}
+
+void comparison(int party_id, GroupElement* res, GroupElement* idx, ComparisonKeyPack* KeyList,
+                int size, int max_bitsize){
+    GroupElement real_idx[size];
+    GroupElement* y = new GroupElement[2 * size];
+    newDCFKeyPack unifiedKeyList[2 * size];
+    for (int i = 0; i < size; i++){
+        real_idx[i] = idx[i] + KeyList[i].mask;
+        y[2 * i].bitsize = KeyList[i].Bout;
+        y[2 * i + 1].bitsize = KeyList[i].Bout;
+        unifiedKeyList[2 * i] = KeyList[i].DCFKeyList[0];
+        unifiedKeyList[2 * i + 1] = KeyList[i].DCFKeyList[1];
+    }
+    reconstruct(size, real_idx, max_bitsize);
+
+    evalNewDCF(party_id, y, real_idx, unifiedKeyList, 2 * size, max_bitsize);
+
+    for (int i = 0; i < size; i++){
+        res[i] = y[2 * i] + y[2 * i + 1] + KeyList[i].correction;
+    }
+
+    delete[] y;
+}
+
 ModularKeyPack modular_offline(int party_id, GroupElement N, int Bout){
     // This is the offline function of modular
     // We need a secure comparison
@@ -11,7 +91,7 @@ ModularKeyPack modular_offline(int party_id, GroupElement N, int Bout){
     ModularKeyPack output;
     GroupElement* one = new GroupElement((uint64_t)(party_id - 2), Bout);
     GroupElement shared_N = N * (uint64_t)(party_id - 2);
-    output.iDCFKey = keyGeniDCF(party_id, N.bitsize, Bout, shared_N, one);
+    output.ComparisonKey = comparison_offline(party_id, N.bitsize, Bout, shared_N, one);
     output.Bin = N.bitsize;
     output.Bout = Bout;
     delete one;
@@ -21,7 +101,7 @@ ModularKeyPack modular_offline(int party_id, GroupElement N, int Bout){
 GroupElement modular(int party_id, GroupElement input, int N, ModularKeyPack key){
     // Assume the input is no bigger than 2*N
     GroupElement* comparison_res = new GroupElement(-1, input.bitsize);
-    evaliDCF(party_id, comparison_res, input, key.iDCFKey);
+    comparison(party_id, comparison_res, input, key.ComparisonKey);
     freeModularKeyPack(key);
     GroupElement output = input - (GroupElement(uint64_t(party_id - 2), input.bitsize) - *comparison_res) * N;
     delete comparison_res;
@@ -34,9 +114,9 @@ TRKeyPack truncate_and_reduce_offline(int party_id, int l, int s){
     output.Bin = s;
     output.Bout = l - s;
     output.s = s;
-    GroupElement two_power_s_minus_one((uint64_t)(party_id - 2) * ((1ULL << s) - 1), s);
+    GroupElement two_power_s_minus_one((uint64_t)(party_id - 2) * ((1ULL << s) - 1), s + 1);
     GroupElement* one = new GroupElement((uint64_t)(party_id - 2), output.Bout);
-    output.iDCFKey = keyGeniDCF(party_id, output.Bin + 1, output.Bout, two_power_s_minus_one, one);
+    output.ComparisonKey = comparison_offline(party_id, output.Bin + 1, output.Bout, two_power_s_minus_one, one);
     delete one;
     return output;
 }
@@ -48,7 +128,7 @@ GroupElement truncate_and_reduce(int party_id, GroupElement input, int s, TRKeyP
     auto segmented_ge = segment(input, s);
     // Eval iDCF
     GroupElement* comparison_res = new GroupElement(-1, input.bitsize - s);
-    evaliDCF(party_id, comparison_res, segmented_ge.second, key.iDCFKey);
+    comparison(party_id, comparison_res, segmented_ge.second, key.ComparisonKey);
     output = segmented_ge.first + *comparison_res;
     delete comparison_res;
     // Need free TR Key
@@ -66,12 +146,12 @@ ContainmentKeyPack containment_offline(int party_id, int Bout, GroupElement* kno
     output.AList = new GroupElement[knots_size];
     output.BList = new GroupElement[knots_size];
     output.CList = new GroupElement[knots_size];
-    output.iDCFKeyList = new iDCFKeyPack[knots_size];
+    output.ComparisonKeyList = new ComparisonKeyPack[knots_size];
     output.CtnNum = knots_size;
     beaver_mult_offline(party_id, output.AList, output.BList, output.CList, peer, knots_size);
     GroupElement* one = new GroupElement((uint64_t)(party_id - 2), output.Bout);
     for (int i = 0; i < knots_size; i++){
-        output.iDCFKeyList[i] = keyGeniDCF(party_id, output.Bin, output.Bout, knots_list[i], one);
+        output.ComparisonKeyList[i] = comparison_offline(party_id, output.Bin, output.Bout, knots_list[i], one);
     }
     delete one;
     return output;
@@ -91,7 +171,7 @@ void containment(int party_id, GroupElement input, GroupElement* output, int kno
         dcf_output[i].bitsize = output[i].bitsize;
     }
 
-    evaliDCF(party_id, dcf_output, input_array, key.iDCFKeyList, knots_size, input.bitsize);
+    comparison(party_id, dcf_output, input_array, key.ComparisonKeyList, knots_size, input.bitsize);
 
     // Observation: We only need knots_num - 1 multiplication as the first segment is identical to DCF output.
     output[0] = dcf_output[0];
@@ -122,9 +202,9 @@ DigDecKeyPack digdec_offline(int party_id, int Bin, int NewBitSize){
     // The number of DCF invocation is decided by SegNum
     // We have to generate multiple DPF and DCF Keys as the random mask cannot be reused
     // We need SegNum - 1 keys as the most significant segmentation do not need comparison?
-    iDCFKeyPack* iDCFKeyList = new iDCFKeyPack[SegNum - 1];
+    ComparisonKeyPack* ComparisonKeyList = new ComparisonKeyPack[SegNum - 1];
     DPFKeyPack* DPFKeyList = new DPFKeyPack[SegNum - 1];
-    output.iDCFKeyList = iDCFKeyList;
+    output.ComparisonKeyList = ComparisonKeyList;
     output.DPFKeyList = DPFKeyList;
     GroupElement two_power_s_minus_one = GroupElement((uint64_t)(party_id - 2) * ((1ULL << NewBitSize) - 1), NewBitSize);
     GroupElement one = GroupElement((uint64_t)(party_id - 2), NewBitSize);
@@ -133,7 +213,7 @@ DigDecKeyPack digdec_offline(int party_id, int Bin, int NewBitSize){
     GroupElement* one_ = new GroupElement((uint64_t)(party_id - 2), NewBitSize);
     for (int i = 0; i < SegNum - 1; i++){
         output.DPFKeyList[i] = keyGenDPF(party_id, NewBitSize, NewBitSize, two_power_s_minus_one, one, true);
-        output.iDCFKeyList[i] = keyGeniDCF(party_id, NewBitSize + 1, NewBitSize, two_power_s_minus_one_, one_);
+        output.ComparisonKeyList[i] = comparison_offline(party_id, NewBitSize + 1, NewBitSize, two_power_s_minus_one_, one_);
     }
     // Perform multiplication offline, we need segNum - 1 AND (replaced by arithmetic multiplication)
     // Beaver triplet should be new bitsize bit.
@@ -160,7 +240,7 @@ void digdec(int party_id, GroupElement input, GroupElement* output, int NewBitSi
     GroupElement* v = new GroupElement[SegNum - 1];
 
     // Generate KeyList for DCF and DPF
-    iDCFKeyPack* iDCFKeyList = key.iDCFKeyList;
+    ComparisonKeyPack* ComparisonKeyList = key.ComparisonKeyList;
     DPFKeyPack* DPFKeyList = key.DPFKeyList;
 
     GroupElement* AList = key.AList;
@@ -186,7 +266,7 @@ void digdec(int party_id, GroupElement input, GroupElement* output, int NewBitSi
     for (int i = 0; i < SegNum; i++){
         parsed_input[i].bitsize = NewBitSize + 1;
     }
-    evaliDCF(party_id, w, parsed_input, iDCFKeyList, SegNum - 1, NewBitSize + 1);
+    comparison(party_id, w, parsed_input, ComparisonKeyList, SegNum - 1, NewBitSize + 1);
 
     // Recover Bit size
     for (int i = 0; i < SegNum; i++){

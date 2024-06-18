@@ -93,6 +93,19 @@ inline void freeNewDCFKeyPack(newDCFKeyPack key){
     delete[] key.v;
 }
 
+struct ComparisonKeyPack{
+    int Bin, Bout;
+    GroupElement mask;
+    GroupElement correction;
+    newDCFKeyPack* DCFKeyList;
+    // first is key with r
+    // second is key with r+alpha
+};
+
+inline void freeComparisonKeyPack(ComparisonKeyPack key){
+    delete[] key.DCFKeyList;
+}
+
 inline void freeDCFKeyPack(DCFKeyPack &key){
     delete[] key.k;
     delete[] key.g;
@@ -339,7 +352,7 @@ inline void freeSplineKeyPair(std::pair<SplineKeyPack, SplineKeyPack> &keys)
 struct ModularKeyPack{
     // Remove int N component as N is shared
     int Bin, Bout;
-    iDCFKeyPack iDCFKey;
+    ComparisonKeyPack ComparisonKey;
 };
 
 inline void freeModularKeyPack(ModularKeyPack key){
@@ -351,29 +364,17 @@ inline void freeModularKeyPack(ModularKeyPack key){
     GroupElement* a;
     GroupElement* b;
     GroupElement* c;*/
-    delete[] key.iDCFKey.k;
-    delete[] key.iDCFKey.v;
-    delete[] key.iDCFKey.g;
-    delete[] key.iDCFKey.random_mask;
-    delete[] key.iDCFKey.a;
-    delete[] key.iDCFKey.b;
-    delete[] key.iDCFKey.c;
+    freeComparisonKeyPack(key.ComparisonKey);
 }
 
 struct TRKeyPack{
     int Bin, Bout;
     int s;
-    iDCFKeyPack iDCFKey;
+    ComparisonKeyPack ComparisonKey;
 };
 
 inline void freeTRKeyPack(TRKeyPack key){
-    delete[] key.iDCFKey.k;
-    delete[] key.iDCFKey.v;
-    delete[] key.iDCFKey.g;
-    delete[] key.iDCFKey.random_mask;
-    delete[] key.iDCFKey.a;
-    delete[] key.iDCFKey.b;
-    delete[] key.iDCFKey.c;
+    freeComparisonKeyPack(key.ComparisonKey);
 }
 
 struct ContainmentKeyPack{
@@ -382,7 +383,7 @@ struct ContainmentKeyPack{
     GroupElement* AList;
     GroupElement* BList;
     GroupElement* CList;
-    iDCFKeyPack* iDCFKeyList;
+    ComparisonKeyPack* ComparisonKeyList;
 };
 
 inline void freeContainmentKeyPack(ContainmentKeyPack key){
@@ -390,13 +391,7 @@ inline void freeContainmentKeyPack(ContainmentKeyPack key){
     delete[] key.BList;
     delete[] key.CList;
     for (int i = 0; i < key.CtnNum; i++){
-        delete[] key.iDCFKeyList[i].k;
-        delete[] key.iDCFKeyList[i].v;
-        delete[] key.iDCFKeyList[i].g;
-        delete[] key.iDCFKeyList[i].random_mask;
-        delete[] key.iDCFKeyList[i].a;
-        delete[] key.iDCFKeyList[i].b;
-        delete[] key.iDCFKeyList[i].c;
+        freeComparisonKeyPack(key.ComparisonKeyList[i]);
     }
 }
 
@@ -404,7 +399,7 @@ struct DigDecKeyPack{
     int Bin, Bout;
     int SegNum;
     int NewBitSize;
-    iDCFKeyPack* iDCFKeyList;
+    ComparisonKeyPack* ComparisonKeyList;
     DPFKeyPack* DPFKeyList;
     GroupElement* AList;
     GroupElement* BList;
@@ -416,17 +411,7 @@ inline void freeDigDecKeyPack(DigDecKeyPack key){
     delete[] key.BList;
     delete[] key.CList;
     for (int i = 0; i < key.SegNum; i++){
-        delete[] key.iDCFKeyList[i].k;
-        delete[] key.iDCFKeyList[i].v;
-        delete[] key.iDCFKeyList[i].g;
-        delete[] key.iDCFKeyList[i].random_mask;
-        delete[] key.iDCFKeyList[i].a;
-        delete[] key.iDCFKeyList[i].b;
-        delete[] key.iDCFKeyList[i].c;
-        delete[] key.DPFKeyList[i].k;
-        delete[] key.DPFKeyList[i].g;
-        delete[] key.DPFKeyList[i].v;
-        delete[] key.DPFKeyList[i].random_mask;
+        freeComparisonKeyPack(key.ComparisonKeyList[i]);
     }
 }
 
@@ -482,3 +467,4 @@ struct SineKeyPack{
 inline void freeSineKeyPack(SineKeyPack Key){
 
 }
+

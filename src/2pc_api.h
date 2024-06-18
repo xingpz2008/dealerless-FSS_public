@@ -8,6 +8,13 @@
 #include "assert.h"
 #include "group_element.h"
 
+ComparisonKeyPack comparison_offline(int party_id, int Bin, int Bout, GroupElement c, GroupElement* payload, bool public_payload);
+
+void comparison(int party_id, GroupElement* res, GroupElement idx, ComparisonKeyPack key);
+
+void comparison(int party_id, GroupElement* res, GroupElement* idx, ComparisonKeyPack* KeyList,
+                int size, int max_bitsize);
+
 ModularKeyPack modular_offline(int party_id, GroupElement N, int Bout);
 
 GroupElement modular(int party_id, GroupElement input, int N, ModularKeyPack key);
@@ -18,7 +25,7 @@ GroupElement truncate_and_reduce(int party_id, GroupElement input, int s, TRKeyP
 
 ContainmentKeyPack containment_offline(int party_id, int Bout, GroupElement* knots_list, int knots_size);
 
-void containment(int party_id, GroupElement input, GroupElement* output, int knots_size, ContainmentKeyPack key);
+void containment(int party_id, GroupElement input, GroupElement* output, int knots_size, ContainmentKeyPack key)__attribute__((optimize("O0")));
 
 DigDecKeyPack digdec_offline(int party_id, int Bin, int NewBitSize);
 
