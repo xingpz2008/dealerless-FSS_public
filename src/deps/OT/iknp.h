@@ -36,7 +36,7 @@ public:
   OTNP<IO> *base_ot;
   PRG128 prg;
   const int lambda = 128;
-  const int block_size = 1024 * 16;
+  int block_size = 1024 * 16;
   int l;
 
   block128 *k0 = nullptr, *k1 = nullptr, *qT = nullptr, *tT = nullptr,
@@ -105,6 +105,10 @@ public:
   }
 
   void send_pre(int length) {
+      // Added:
+      int old_block_size = this->block_size;
+      this->block_size =
+              std::min(old_block_size, int(ceil(length / 256.0)) * 256);
     length = padded_length(length);
     block128 q[block_size];
     qT = new block128[length];
@@ -122,13 +126,22 @@ public:
       sse_trans((uint8_t *)(qT + j * block_size), (uint8_t *)q, 128,
                 block_size);
     }
+
+    //Added:
+      this->block_size = old_block_size;
   }
 
   void recv_pre(const bool *r, int length) {
+      // Added:
+      int old_block_size = this->block_size;
+      this->block_size =
+              std::min(old_block_size, int(ceil(length / 256.0)) * 256);
     int old_length = length;
     length = padded_length(length);
     block128 t[block_size];
     tT = new block128[length];
+
+
 
     if (not setup){
         setup_recv();
@@ -159,6 +172,9 @@ public:
 
     delete[] block_r;
     delete[] r2;
+
+    // Added
+      this->block_size = old_block_size;
   }
 
   void got_send_post(const block128 *data0, const block128 *data1, int length) {

@@ -14,7 +14,7 @@ GroupElement inner_product(GroupElement* A, GroupElement* B, int size, int scale
 }
 
 GroupElement cleartext_sin(GroupElement input, int scale, bool using_lut){
-    std::cout << "Claer sin." << std::endl;
+    // std::cout << "Claer sin." << std::endl;
     assert (((scale - 1) % 2) == 0);
     int Bin = input.bitsize;
     GroupElement output(0, Bin);
@@ -95,28 +95,37 @@ GroupElement cleartext_sin(GroupElement input, int scale, bool using_lut){
     }else{
         GroupElement x_tr = segment(x_frac, scale - 5).first;
         GroupElement* coefs = new GroupElement[48];
-        create_approx_spline(0216, scale - 1 , scale, coefs);
+        // Changed, scale - 1 to ell
+        create_approx_spline(0216, Bin, scale, coefs);
         // ax2+bx+c -> ax2+(b-2ar)x+c+r2 ,def
-        prng.SetSeed(toBlock(time(NULL)));
-        auto r = prng.get<uint64_t>();
-        GroupElement mask = GroupElement(r, scale - 1, scale);
+        int r = 0;
+        GroupElement mask = GroupElement(r, Bin, scale);
         mod(mask);
         for (int i = 0; i < 16; i++){
-            coefs[16 + i] = coefs[16 + i] - scale_mult(scale_mult(coefs[i], mask, scale), GroupElement(2, scale - 1, scale), scale);
+            coefs[16 + i] = coefs[16 + i] - scale_mult(coefs[i], mask, scale) - scale_mult(coefs[i], mask, scale);
+            // coefs[16 + i] = coefs[16 + i] - scale_mult(scale_mult(coefs[i], mask, scale), GroupElement(2, scale - 1, scale), scale);
             coefs[32 + i] = coefs[32 + i] + scale_mult(mask, mask, scale);
         }
         // fecth coef
         GroupElement dpf_output[16];
+
+        // Note: We modify here as 1 cannot be represented in Fixed-pt Arithmetic thus cause 0 output.
+        // This modification do not affect the correctness of protocol as the implementation is priLUT with l_out bitlength.
         for (int i = 0; i < 16; i++){
-            dpf_output[i] = GroupElement(0, scale - 1);
+            dpf_output[i] = GroupElement(0, Bin);
         }
-        dpf_output[x_tr.value] = GroupElement(1, scale - 1, scale);
+        dpf_output[x_tr.value] = GroupElement(1, Bin);
         GroupElement d = inner_product(dpf_output, coefs, 16, scale);
         GroupElement e = inner_product(dpf_output, &(coefs[16]), 16, scale);
         GroupElement f = inner_product(dpf_output, &(coefs[32]), 16, scale);
 
-        GroupElement tmp_res = scale_mult(d, scale_mult(x_frac, x_frac, scale), scale) + scale_mult(e, x_frac, scale) + f;
-        output = scale_mult(a, tmp_res, scale);
+        x_frac.bitsize = Bin;
+        a.bitsize = Bin;
+        GroupElement x2 = scale_mult(x_frac, x_frac, scale);
+        GroupElement ax2 = scale_mult(d, x2, scale);
+        GroupElement bx = scale_mult(e, x_frac, scale);
+        GroupElement tmp_res = ax2 + bx + f;
+        output = scale_mult(tmp_res, a, scale);
         delete[] coefs;
     }
 

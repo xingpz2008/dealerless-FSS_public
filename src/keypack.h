@@ -103,7 +103,8 @@ struct ComparisonKeyPack{
 };
 
 inline void freeComparisonKeyPack(ComparisonKeyPack key){
-    delete[] key.DCFKeyList;
+    freeNewDCFKeyPack(key.DCFKeyList[0]);
+    freeNewDCFKeyPack(key.DCFKeyList[1]);
 }
 
 inline void freeDCFKeyPack(DCFKeyPack &key){
@@ -410,8 +411,12 @@ inline void freeDigDecKeyPack(DigDecKeyPack key){
     delete[] key.AList;
     delete[] key.BList;
     delete[] key.CList;
-    for (int i = 0; i < key.SegNum; i++){
+    for (int i = 0; i < key.SegNum - 1; i++){
         freeComparisonKeyPack(key.ComparisonKeyList[i]);
+        delete[] key.DPFKeyList[i].k;
+        delete[] key.DPFKeyList[i].g;
+        delete[] key.DPFKeyList[i].v;
+        delete[] key.DPFKeyList[i].random_mask;
     }
 }
 
@@ -465,6 +470,40 @@ struct SineKeyPack{
 };
 
 inline void freeSineKeyPack(SineKeyPack Key){
-
+    freeModularKeyPack(Key.ModKey);
+    //freeContainmentKeyPack(Key.CtnKey);
+    //freeDigDecKeyPack(Key.DigDecKey);
+    delete[] Key.EvalAllKeyList;
+    //freeSplinePolyApproxKeyPack(Key.SplineApproxKey);
+    delete[] Key.AList;
+    delete[] Key.BList;
+    delete[] Key.CList;
 }
 
+typedef SineKeyPack CosineKeyPack;
+
+inline void freeCosineKeyPack(CosineKeyPack Key){
+    freeSineKeyPack(Key);
+}
+
+typedef SineKeyPack TangentKeyPack;
+
+inline void freeTangentKeyPack(TangentKeyPack Key){
+    freeModularKeyPack(Key.ModKey);
+    //freeContainmentKeyPack(Key.CtnKey);
+    delete[] Key.EvalAllKeyList;
+    //freeSplinePolyApproxKeyPack(Key.SplineApproxKey);
+    delete[] Key.AList;
+    delete[] Key.BList;
+    delete[] Key.CList;
+}
+
+struct TestKeyPack{
+    ModularKeyPack key1;
+    TRKeyPack key2;
+    ContainmentKeyPack key3;
+    DigDecKeyPack key4;
+    DPFKeyPack key5;
+    PrivateLutKey key6;
+    SplinePolyApproxKeyPack key7;
+};

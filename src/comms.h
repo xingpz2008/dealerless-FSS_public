@@ -155,9 +155,9 @@ public:
 
     void recv_batched_input(uint64_t *g, int size, int bw);
 
-    void send_cot(osuCrypto::block, osuCrypto::block*, int);
+    void send_cot(osuCrypto::block, osuCrypto::block*, int)__attribute__((optimize("O0")));
 
-    void recv_cot(osuCrypto::block* recv_arr, int size, bool* sel);
+    void recv_cot(osuCrypto::block* recv_arr, int size, bool* sel)__attribute__((optimize("O0")));
 
     void send_cot(uint64_t, uint64_t*, int);
 

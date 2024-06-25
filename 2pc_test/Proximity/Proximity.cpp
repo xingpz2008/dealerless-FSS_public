@@ -25,6 +25,12 @@ Dealer* dealer = nullptr;
 Peer* peer = nullptr;
 extern int32_t numRounds;
 
+int bitsize = 16;
+int scale = 9;
+float left_pt = 0;
+float right_pt = 0.5;
+bool using_lut = false;
+
 /*
 MUX wrapper:
 
@@ -49,9 +55,30 @@ void multiplexer2(int party_id, uint8_t *control_bit, GroupElement* dataA, Group
 */
 
 int main(int argc, char **argv){
-    float value = 0.43;
-    GroupElement input(value, 16, 9);
-    GroupElement output = cleartext_sin(input, 9, true);
-    std::cout << "Value = " << output.value << " With bit size " << output.bitsize << std::endl;
-    std::cout << "Lib value = " << GroupElement(sin(M_PI * value), 16, 9).value << std::endl;
+    float resolution = (float)1 / (1 << scale);
+    float value = (float)left_pt;
+    int test_num = (int)((right_pt - left_pt) / resolution);
+    int ulp = 0;
+    int max_delta_ulp = 0;
+    int i_max = 0;
+    int delta_ulp = 0;
+    for (int i = 0; i < test_num; i++){
+        GroupElement input(value + (resolution) * i, bitsize, scale);
+        if (i == 40){
+            int sss = 9;
+        }
+        GroupElement output = cleartext_sin(input, scale, using_lut);
+        GroupElement lib_output = GroupElement(sin(M_PI * (value + (resolution) * i)), bitsize, scale);
+        delta_ulp = abs((int)output.value - (int)lib_output.value);
+        if (delta_ulp > max_delta_ulp){
+            i_max = i;
+            max_delta_ulp = delta_ulp;
+        }
+        ulp += delta_ulp;
+    }
+
+    std::cout << "Accumulated ULP error = " << ulp << " within " << test_num << " testcases, avg_ULP = " << (float)ulp / test_num << std::endl;
+
+    // std::cout << "Value = " << output.value << " With bit size " << output.bitsize << std::endl;
+    // std::cout << "Lib value = " << GroupElement(sin(M_PI * value), 16, 9).value << std::endl;
 }

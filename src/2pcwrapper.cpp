@@ -56,9 +56,12 @@ void _multiplexer(int party_id, uint8_t *sel, block *dataA, block *output,
 void multiplexer(int party_id, uint8_t *sel, block *dataA, block *output,
                   int32_t size, Peer* player){
     // This mux returns block data with b * x
-    block localTemp[size];
-    block OTRes[size];
-    block AnotherOTRes[size];
+    block* localTemp = new block[size];
+    block* OTRes = new block[size];
+    block* AnotherOTRes = new block[size];
+    //block localTemp[size];
+    //block OTRes[size];
+    //block AnotherOTRes[size];
     for (int i = 0; i < size; i++){
         localTemp[i] = (*sel == 0 ? ZeroBlock: dataA[i]);
     }
@@ -67,10 +70,10 @@ void multiplexer(int party_id, uint8_t *sel, block *dataA, block *output,
     switch(party_id){
         case 2:{
             for (int i=0; i < size; i++){
-                player->send_cot(dataA[i], OTRes + i * sizeof(block), 1);
+                player->send_cot(dataA[i], &(OTRes[i]), 1);
                 //player->send_block(OTRes[i]);
                 //std::cout << localShares[i] << std::endl;
-                player->recv_cot(AnotherOTRes + i * sizeof(block), 1, (bool*)sel);
+                player->recv_cot(&(AnotherOTRes[i]), 1, (bool*)sel);
                 //player->send_block(AnotherOTRes[i]);
             }
             //std::cout << "player2" << std::endl;
@@ -78,10 +81,10 @@ void multiplexer(int party_id, uint8_t *sel, block *dataA, block *output,
         }
         case 3:{
             for (int i=0; i < size; i++){
-                player->recv_cot(OTRes + i * sizeof(block), 1, (bool*)sel);
+                player->recv_cot(&(OTRes[i]), 1, (bool*)sel);
                 //block recv = player->recv_block();
                 //block recons = xorBlocks(recv, OTRes[i]);
-                player->send_cot(dataA[i], AnotherOTRes + i * sizeof(block), 1);
+                player->send_cot(dataA[i], &(AnotherOTRes[i]), 1);
                 //block recv = player->recv_block();
                 //recons = xorBlocks(recv, AnotherOTRes[i]);
                 //std::cout << recons << std::endl;
@@ -95,6 +98,9 @@ void multiplexer(int party_id, uint8_t *sel, block *dataA, block *output,
     for (int i = 0; i < size; i++){
         output[i] = localTemp[i] ^ OTRes[i] ^ AnotherOTRes[i];
     }
+    delete[] OTRes;
+    delete[] AnotherOTRes;
+    delete[] localTemp;
 }
 
 void multiplexer(int party_id, uint8_t *sel, uint64_t *dataA, uint64_t *output,
@@ -719,12 +725,16 @@ void beaver_mult_offline(int party_id, GroupElement* a, GroupElement* b, GroupEl
 void beaver_mult_online(int party_id, GroupElement input0, GroupElement input1,
                         GroupElement a, GroupElement b, GroupElement c,
                         GroupElement* output, Peer* player){
-    input0 = input0 - a;
-    input1 = input1 - b;
-    reconstruct(&input0);
-    reconstruct(&input1);
+    GroupElement* input0_new = new GroupElement(0, input0.bitsize);
+    GroupElement* input1_new = new GroupElement(0, input1.bitsize);
+    *input0_new = input0 - a;
+    *input1_new = input1 - b;
+    reconstruct(input0_new);
+    reconstruct(input1_new);
     // Assume party_id \in {2, 3}
-    *output = c + b * input0 + a * input1 + input1 * input0 * (party_id - 2);
+    *output = c + b * *input0_new + a * *input1_new + *input1_new * *input0_new * (party_id - 2);
+    delete input0_new;
+    delete input1_new;
 }
 
 void beaver_mult_online(int party_id, GroupElement* input0, GroupElement* input1,

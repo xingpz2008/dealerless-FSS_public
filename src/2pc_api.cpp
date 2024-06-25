@@ -226,6 +226,9 @@ DigDecKeyPack digdec_offline(int party_id, int Bin, int NewBitSize){
         C[i].bitsize = NewBitSize;
     }
     beaver_mult_offline(party_id, A, B, C, peer, SegNum - 1);
+    output.AList = A;
+    output.BList = B;
+    output.CList = C;
     delete one_;
     return output;
 }
@@ -345,7 +348,7 @@ GroupElement pub_lut(int party_id, GroupElement input, GroupElement* table, Grou
         shifted_full_domain_res = new GroupElement[table_size];
     }
     for (int i = 0; i < table_size; i++){
-        int real_vector_idx = (i + abs_val.value * (2 * (int)left_flag - 1)) % (1ULL << table_size);
+        int real_vector_idx = (i + abs_val.value * (2 * (int)left_flag - 1)) % table_size;
         shifted_full_domain_res[i] = full_domain_res[real_vector_idx];
         // Perform multiplication on local table
         output = output + shifted_full_domain_res[i] * table[i];

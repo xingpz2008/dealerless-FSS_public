@@ -3,6 +3,7 @@
 //
 #include "group_element.h"
 #include "utils.h"
+#include <time.h>
 
 GroupElement inner_product(GroupElement* A, GroupElement* B, int size, int scale);
 

@@ -74,7 +74,9 @@ int main(int argc, char **argv){
         server = new Peer(address, port);
         peer = server;
         uint64_t init = peer->bytesSent;
-        key = sine_offline(party, 16, 16, 8, false, 4, 16, 2);
+        uint64_t init_rounds = peer->rounds;
+        // key = tangent_offline(party, 16, 16, 9, false, 16, 2);
+        key = sine_offline(party, 8, 8, 5, true, 3, 16, 2);
         // int party_id, GroupElement* input, GroupElement* output, bool hold_arithmetic, int size, Peer* player
         // peer->send_cot(input, output, mul_size, true);
         // cross_term_gen(party, input, output, true, mul_size, peer);
@@ -87,16 +89,18 @@ int main(int argc, char **argv){
         uint64_t overhead[3] = {0,0,0};
         overhead[0] = peer->bytesSent - init;
         overhead[1] = peer->bytesReceived;
-        overhead[2] = numRounds;
-        sine(party, GroupElement(1, 16), key);
+        overhead[2] = peer->rounds - init_rounds;
+        //tangent(party, GroupElement(1, 16), key);
+        sine(party, GroupElement(1, 8), key);
         std::cout << "Offline Overhead: 1. Send = " << overhead[0] << ", 2. Received = " << overhead[1] << ", 3. Rounds = " << overhead[2] << std::endl;
-        std::cout << "Online Overhead: 1. Send = " << peer->bytesSent - overhead[0] << ", 2. Received = " << peer->bytesReceived - overhead[1]<< ", 3. Rounds = " << numRounds - overhead[2]<< std::endl;
+        std::cout << "Online Overhead: 1. Send = " << peer->bytesSent - overhead[0] << ", 2. Received = " << peer->bytesReceived - overhead[1]<< ", 3. Rounds = " << peer->rounds - overhead[2]<< std::endl;
     }
     else{
         cout << "Server execution." << endl;
         client = waitForPeer(port);
         peer = client;
-        key = sine_offline(party, 16, 16, 8, false, 4, 16, 2);
+        // key = tangent_offline(party, 16, 16, 9, false, 16, 2);
+        key = sine_offline(party, 8, 8, 5, true, 3, 16, 2);
         //peer->recv_cot(output, mul_size, sel, true);
         //cross_term_gen(party, input, output, false, mul_size, peer);
         //modular_offline(party, GroupElement(2,2), 2);
@@ -106,7 +110,8 @@ int main(int argc, char **argv){
         }
          */
         std::cout << "Overhead: 1. Send = " << peer->bytesSent << ", 2. Received = " << peer->bytesReceived << ", 3. Rounds = " << numRounds << std::endl;
-        sine(party, GroupElement(1, 16), key);
+        sine(party, GroupElement(1, 8), key);
+        // tangent(party, GroupElement(1, 16), key);
         std::cout << "Overhead: 1. Send = " << peer->bytesSent << ", 2. Received = " << peer->bytesReceived << ", 3. Rounds = " << numRounds << std::endl;
     }
     delete[] input;

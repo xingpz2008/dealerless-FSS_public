@@ -67,7 +67,7 @@ int main(int argc, char **argv){
     GroupElement a_ge(a, bl);
     GroupElement b_ge(b, bl);
     cout << party << endl;
-    block b_out;
+    block *b_out = new block;
 
     if(party==CLIENT){
         cout << "Client execution." << endl;
@@ -78,8 +78,8 @@ int main(int argc, char **argv){
         //client = new Peer(address, port);
         server = new Peer(address, port);
         peer = server;
-        multiplexer(party, &choice_bit, &a_ge, out, 1, peer);
-        cout << out->value%(1ULL << bl) << endl;
+        multiplexer(party, &choice_bit, &a_, b_out, 1, peer);
+        cout << *b_out << endl;
     }
     else{
         cout << "Server execution." << endl;
@@ -90,7 +90,7 @@ int main(int argc, char **argv){
         client = waitForPeer(port);
         peer = client;
 
-        multiplexer(party, &choice_bit, &b_ge, out, 1, peer);
-        cout << out->value%(1ULL << bl) << endl;
+        multiplexer(party, &choice_bit, &b_, b_out, 1, peer);
+        cout << *b_out << endl;
     }
 }
