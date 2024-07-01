@@ -316,16 +316,18 @@ inline std::pair<GroupElement, GroupElement> segment(const GroupElement x, int l
     return std::make_pair(high, low);
 }
 
-inline GroupElement scale_mult(GroupElement a, GroupElement b, int scale){
+inline GroupElement scale_mult(GroupElement a, GroupElement b, int scale, bool isSigned = true){
     GroupElement c;
     c.bitsize = a.bitsize;
     uint64_t extended_a_value = a.value;
     uint64_t extended_b_value = b.value;
-    if (a.value > ((1 << (a.bitsize - 1)) - 1)){
-        extended_a_value += ((1 << (64 - a.bitsize)) - 1) << a.bitsize;
-    }
-    if (b.value > ((1 << (b.bitsize - 1)) - 1)){
-        extended_b_value += ((1 << (64 - b.bitsize)) - 1) << b.bitsize;
+    if (isSigned){
+        if (a.value > ((1 << (a.bitsize - 1)) - 1)){
+            extended_a_value += ((1 << (64 - a.bitsize)) - 1) << a.bitsize;
+        }
+        if (b.value > ((1 << (b.bitsize - 1)) - 1)){
+            extended_b_value += ((1 << (64 - b.bitsize)) - 1) << b.bitsize;
+        }
     }
     c.value = extended_a_value * extended_b_value >> scale;
     mod(c);

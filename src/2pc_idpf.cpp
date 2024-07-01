@@ -139,7 +139,7 @@ DPFKeyPack keyGenDPF(int party_id, int Bin, int Bout,
         //std::cout << "Idx (from lsb) = " << (int) idx[Bin - i - 1] << std::endl;
         //std::cout << "Real idx " << Bin - i - 1 << "= " << (int)real_idx[Bin - i - 1];
         level_and_res = check_bit_overflow(party_id, idx[Bin - i - 1], level_and_res, peer);
-        std::cout << ", level and res = " << (int)level_and_res << std::endl;
+        //std::cout << ", level and res = " << (int)level_and_res << std::endl;
     }
 
     for (int i = 0; i < Bin; i++){
@@ -181,10 +181,12 @@ DPFKeyPack keyGenDPF(int party_id, int Bin, int Bout,
             nextLevelNodes[2 * j + 1] = ct[1];
         }
         //std::cout << "Expand res = " << std::endl;
+        /*
         for (int j=0;j<expandNum;j++){
             std::cout << nextLevelNodes [2 * j] << ", " << (int)lsb(nextLevelNodes[2 * j]) << std::endl;
             std::cout << nextLevelNodes [2 * j + 1] << ", " << (int)lsb(nextLevelNodes[2 * j + 1]) << std::endl;
         }
+         */
 
 
         // Second step: Invoke F_MUX and retrieve reconstructed leftChildren or rightChildren
@@ -254,10 +256,12 @@ DPFKeyPack keyGenDPF(int party_id, int Bin, int Bout,
         }
         std::cout << std::endl;
         //std::cout << "Next levelNodes=" << std::endl;
+        /*
         for (int j=0; j<expandNum;j++){
             std::cout << levelNodes[2*j] << ", "<< (int)levelControlBits[2*j]<< std::endl;
             std::cout << levelNodes[2*j+1] << ", "<< (int)levelControlBits[2*j+1]<< std::endl;
         }
+         */
     }
 
 
@@ -292,7 +296,7 @@ DPFKeyPack keyGenDPF(int party_id, int Bin, int Bout,
 
         lastLevelSum = lastLevelSum + lastLevelElements[i];
         controlBitSum = controlBitSum + (uint64_t)levelControlBits[i];
-        std::cout << levelNodes[i] << ", " << (int)levelControlBits[i] << ", " << lastLevelElements[i];
+        //std::cout << levelNodes[i] << ", " << (int)levelControlBits[i] << ", " << lastLevelElements[i];
         //std::cout << ", CtrlBitSum = " << (int)controlBitSum << ", LevelSum = " << lastLevelSum << std::endl;
     }
     // Get last 2 bits of bits sum to compare

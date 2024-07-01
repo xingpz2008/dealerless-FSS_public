@@ -507,3 +507,19 @@ struct TestKeyPack{
     PrivateLutKey key6;
     SplinePolyApproxKeyPack key7;
 };
+
+struct ProximityKeyPack{
+    int Bin, Bout, scale;
+    SineKeyPack* SineKeyList;
+    CosineKeyPack* CosineKeyList;
+    GroupElement* Alist;
+    GroupElement* Blist;
+    GroupElement* Clist;
+    // MT triples = 4
+    // SineKey = 2
+    // Cosine Key = 2
+};
+
+inline void freeProximityKeyPack(ProximityKeyPack key){
+
+};

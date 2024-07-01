@@ -552,6 +552,7 @@ void create_approx_spline(int uuid, int bitsize, int scale, GroupElement* coeffi
             float list[] = {-2.4207849687076878e-1,-7.2390414238067667e-1,-1.1987581953565418,-1.6620675517525636,-2.1093702892801631,-2.5363586381721683,-2.9389204673831886,-3.3131788867008045,-3.6555295833987529,-3.9626755339118653,-4.2316587563840384,-4.45988879875165,-4.6451676897725758,-4.7857111218260835,-4.8801657387902724,-4.9276246922600206,
                             3.1444284283908551,3.1745197788901646,3.2338312499498127,3.3206343716408515,3.4323712252858902,3.5656956610169006,3.7165273849992784,3.8801181849002004,4.0511293964863269,4.2237195597007684,4.3916410711697527,4.5483445137737446,4.6870892350940041,4.8010586618294626,4.8834788340360662,4.9277408790262802,
                             -4.9216377766292095e-6,-4.8453936502295579e-4,-0.0023462618160401219,-0.0064214190445875076,-0.013408514536218837,-0.023824618470484598,-0.037961186931876514,-0.055845433416165845,-0.077208278279919537,-0.10145978194275898,-0.1276728305540428,-0.15457569066602336,-0.1805538848120348,-0.20366166671457289,-0.22164321030738637,-0.23196402094954596};
+            list_size = 48;
             for (int i = 0; i < list_size; i++){
                 coefficientList[i] = GroupElement(list[i], bitsize, scale);
             }
@@ -562,6 +563,7 @@ void create_approx_spline(int uuid, int bitsize, int scale, GroupElement* coeffi
             float list[] = {-4.9276246922600206,-4.8801657387902724,-4.7857111218260835,-4.6451676897725758,-4.45988879875165,-4.2316587563840384,-3.9626755339118653,-3.6555295833987529,-3.3131788867008045,-2.9389204673831886,-2.5363586381721683,-2.1093702892801631,-1.6620675517525636,-1.1987581953565418,-0.72390414238067669,-0.24207849687076877,
             -0.00011618676625937336,-0.0033130952457940651,-0.015347540003379066,-0.041921545321428007,-0.08845571502209483,-0.15998231478571429,-0.26104402578890284,-0.39559981308757364,-0.56693929819939581,-0.77760691761608991,-1.0293370228447323,-1.3230009360057271,-1.6585668198882877,-2.0350730545932709,-2.4506156365094878,-2.9023499315200865,
             1.0000002454985888,1.0000547720130788,1.0004398837436375,1.0016988102918232,1.0046243665329366,1.0102330159348241,1.0197311144296588,1.0344740241135555,1.0559189373587332,1.0855723887219655,1.1249335524949235,1.1754345257866854,1.2383788788376973,1.3148798143197307,1.4057993144848902,1.5116896683399588};
+            list_size = 48;
             for (int i = 0; i < list_size; i++){
                 coefficientList[i] = GroupElement(list[i], bitsize, scale);
             }
@@ -631,7 +633,7 @@ void create_sub_lut(int function, int Bin, int Bout, int scale, int segNum, Grou
                     float idx = (j << (i * Bin / segNum)) / (float)(1 << scale);
                     lut[i][j] = GroupElement(sin((j << (i * Bin / segNum)) / (float)(1 << scale) * (M_PI)),
                                              Bout, scale);
-                    std::cout << "i = " << i << ", j = " << j << ", Generating sin(" << idx << " * Pi)" << std::endl;
+                    // std::cout << "i = " << i << ", j = " << j << ", Generating sin(" << idx << " * Pi)" << std::endl;
                     break;
                 }
                 case 1:{
@@ -645,7 +647,7 @@ void create_sub_lut(int function, int Bin, int Bout, int scale, int segNum, Grou
                     float idx = (j << (i * Bin / segNum)) / (float)(1 << scale);
                     lut[i][j] = GroupElement(tan((j << (i * Bin / segNum)) / (float)(1 << scale) * (M_PI)),
                                              Bout, scale);
-                    std::cout << "i = " << i << ", j = " << j << ", Generating tan(" << idx << " * Pi)" << std::endl;
+                    // std::cout << "i = " << i << ", j = " << j << ", Generating tan(" << idx << " * Pi)" << std::endl;
                     break;
                 }
                 default:{
@@ -655,4 +657,22 @@ void create_sub_lut(int function, int Bin, int Bout, int scale, int segNum, Grou
             }
         }
     }
+}
+
+int randint_range(int n,int m){//产生n~m间的随机数（包括m和n）
+    double base=((double)rand())/RAND_MAX;
+    int res=n+(base*(double)(m-n+1));
+    return res;
+}
+
+float decode_from_ge_binary(GroupElement x, int bitlen, int scale){
+    return ((float)x.value) / (1 << scale);
+}
+
+uint64_t encode_to_ge_binary(float x, int bitlen, int scale){
+    return GroupElement(x, bitlen, scale).value;
+}
+
+int get_ulp(GroupElement x, GroupElement y){
+    return abs((int)x.value - (int)y.value);
 }

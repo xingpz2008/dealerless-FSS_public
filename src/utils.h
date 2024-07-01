@@ -85,3 +85,11 @@ void matmul_eval_helper(int dim1, int dim2, int dim3, GroupElement *A,
 void create_approx_spline(int uudi, int bitsize, int scale, GroupElement* coefficientList);
 
 void create_sub_lut(int function, int Bin, int Bout, int scale, int segNum, GroupElement** lut);
+
+int randint_range(int n,int m);
+
+float decode_from_ge_binary(GroupElement x, int bitlen, int scale);
+
+uint64_t encode_to_ge_binary(float x, int bitlen, int scale);
+
+int get_ulp(GroupElement x, GroupElement y);

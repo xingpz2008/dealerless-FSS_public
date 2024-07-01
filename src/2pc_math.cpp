@@ -147,8 +147,8 @@ GroupElement sine(int party_id, GroupElement input, SineKeyPack key){
                        digdec_segNum, publicCosList);
         for (int i = 0; i < digdec_segNum; i++){
             // We evaluate sin, for cos, we just use the vector to do inner product
-            std::cout << "Iteration i = " << i << ", dicdec_segNum = " << digdec_segNum << std::endl;
-            std::cout << "x_seg[i] = " << x_seg[i].value << std::endl;
+            //std::cout << "Iteration i = " << i << ", dicdec_segNum = " << digdec_segNum << std::endl;
+            //std::cout << "x_seg[i] = " << x_seg[i].value << std::endl;
             sin_lut_output[i] = pub_lut(party_id, x_seg[i], publicSinList[i],
                                         shifted_vector_list[i], 1 << key.digdec_new_bitsize,
                                         input.bitsize, key.EvalAllKeyList[i]);
@@ -499,8 +499,8 @@ GroupElement tangent(int party_id, GroupElement input, TangentKeyPack key){
         create_sub_lut(2, key.digdec_new_bitsize, input.bitsize, key.scale,
                        digdec_segNum, publicTanList);
         for (int i = 0; i < digdec_segNum; i++){
-            std::cout << "Iteration i = " << i << ", dicdec_segNum = " << digdec_segNum << std::endl;
-            std::cout << "x_seg[i] = " << x_seg[i].value << std::endl;
+            //std::cout << "Iteration i = " << i << ", dicdec_segNum = " << digdec_segNum << std::endl;
+            //std::cout << "x_seg[i] = " << x_seg[i].value << std::endl;
             tan_lut_output[i] = pub_lut(party_id, x_seg[i], publicTanList[i],
                                         shifted_vector_list[i], 1 << key.digdec_new_bitsize,
                                         input.bitsize, key.EvalAllKeyList[i]);
@@ -521,5 +521,75 @@ GroupElement tangent(int party_id, GroupElement input, TangentKeyPack key){
     delete[] transform_coefficients;
     delete x_transform;
     //freeTangentKeyPack(key);
+    return output;
+}
+
+ProximityKeyPack proximity_offline(int party_id, int Bin, int scale, bool using_lut, int digdec_new_bitsize,
+                                   int approx_segNum, int approx_deg){
+    // delta = sin^2 pi [(xA-xB)/2] + cos pi xA * cos pi xB * sin^2 pi [(yA-yB)/2]
+    ProximityKeyPack output;
+
+    output.Bin = Bin;
+    output.Bout = Bin;
+    output.scale = scale;
+
+    output.SineKeyList = new SineKeyPack[2];
+    output.SineKeyList[0] = sine_offline(party_id, Bin, Bin, scale, using_lut, digdec_new_bitsize,
+                                         approx_segNum, approx_deg);
+    output.SineKeyList[1] = sine_offline(party_id, Bin, Bin, scale, using_lut, digdec_new_bitsize,
+                                         approx_segNum, approx_deg);
+
+    output.CosineKeyList = new CosineKeyPack[2];
+    output.CosineKeyList[0] = cosine_offline(party_id, Bin, Bin, scale, using_lut, digdec_new_bitsize,
+                                             approx_segNum, approx_deg);
+    output.CosineKeyList[1] = cosine_offline(party_id, Bin, Bin, scale, using_lut, digdec_new_bitsize,
+                                             approx_segNum, approx_deg);
+
+    output.Alist = new GroupElement[4];
+    output.Blist = new GroupElement[4];
+    output.Clist = new GroupElement[4];
+    beaver_mult_offline(party_id, output.Alist, output.Blist, output.Clist, peer, 4);
+
+    return output;
+}
+
+GroupElement proximity(int party_id, GroupElement xA, GroupElement yA, GroupElement xB, GroupElement yB,
+                       ProximityKeyPack key){
+    // delta = sin^2 pi [(xA-xB)/2] + cos pi xA * cos pi xB * sin^2 pi [(yA-yB)/2]
+    int scale = key.scale;
+    GroupElement front_input = scale_mult((xA - xB), GroupElement(0.5, xA.bitsize, scale), scale);
+    GroupElement back_input = scale_mult((yA - yB), GroupElement(0.5, xA.bitsize, scale), scale);
+    GroupElement _front_output = sine(party_id, front_input, key.SineKeyList[0]);
+
+    GroupElement _back_output_0 = cosine(party_id, xA, key.CosineKeyList[0]);
+    GroupElement _back_output_1 = cosine(party_id, xB, key.CosineKeyList[1]);
+    GroupElement _back_output_2 = sine(party_id, back_input, key.SineKeyList[1]);
+
+    GroupElement* mulA = new GroupElement[3];
+    GroupElement* mulB = new GroupElement[3];
+    GroupElement* batch_mul_output = new GroupElement[3];
+    mulA[0] = _front_output;
+    mulA[1] = _back_output_0;
+    mulA[2] = _back_output_2;
+    mulB[0] = _front_output;
+    mulB[1] = _back_output_1;
+    mulB[2] = _back_output_2;
+    for (int i = 0; i < 3; i++){
+        batch_mul_output[i].bitsize = key.Bin;
+    }
+    beaver_mult_online(party_id, mulA, mulB, key.Alist, key.Blist, key.Clist, batch_mul_output,
+                       3, peer);
+
+    GroupElement front_output = batch_mul_output[0];
+    GroupElement* back_output = new GroupElement(0, key.Bin);
+    beaver_mult_online(party_id, batch_mul_output[1], batch_mul_output[2], key.Alist[3], key.Blist[3],
+                       key.Clist[3], back_output, peer);
+    GroupElement output = front_output + *back_output;
+
+    // freeProximityKeyPack(key);
+    delete[] mulA;
+    delete[] mulB;
+    delete[] batch_mul_output;
+    delete back_output;
     return output;
 }

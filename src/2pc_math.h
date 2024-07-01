@@ -20,3 +20,9 @@ TangentKeyPack tangent_offline(int party_id, int Bin, int Bout, int scale, bool 
                                int approx_segNum, int approx_deg);
 
 GroupElement tangent(int party_id, GroupElement input, TangentKeyPack key);
+
+ProximityKeyPack proximity_offline(int party_id, int Bin, int scale, bool using_lut, int digdec_new_bitsize,
+                               int approx_segNum, int approx_deg)__attribute__((optimize("O0")));
+
+GroupElement proximity(int party_id, GroupElement xA, GroupElement yA, GroupElement xB, GroupElement yB,
+                       ProximityKeyPack key)__attribute__((optimize("O0")));
