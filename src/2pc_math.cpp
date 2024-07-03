@@ -180,7 +180,7 @@ GroupElement sine(int party_id, GroupElement input, SineKeyPack key){
         y_0 = spline_poly_approx(party_id, x_frac, key.SplineApproxKey);
     }
     beaver_mult_online(party_id, m[0], y_0, key.AList[key.MTList_len - 2],
-                       key.AList[key.MTList_len - 2],key.AList[key.MTList_len - 2],
+                       key.BList[key.MTList_len - 2],key.CList[key.MTList_len - 2],
                        &output, peer);
 
     delete[] v;
@@ -363,7 +363,7 @@ GroupElement cosine(int party_id, GroupElement input, CosineKeyPack key){
         y_0 = spline_poly_approx(party_id, x_frac, key.SplineApproxKey);
     }
     beaver_mult_online(party_id, m[0], y_0, key.AList[key.MTList_len - 2],
-                       key.AList[key.MTList_len - 2],key.AList[key.MTList_len - 2],
+                       key.BList[key.MTList_len - 2],key.CList[key.MTList_len - 2],
                        &output, peer);
 
     delete[] v;
@@ -514,7 +514,7 @@ GroupElement tangent(int party_id, GroupElement input, TangentKeyPack key){
         y_0 = spline_poly_approx(party_id, x_frac, key.SplineApproxKey);
     }
     beaver_mult_online(party_id, m[0], y_0, key.AList[key.MTList_len - 2],
-                       key.AList[key.MTList_len - 2],key.AList[key.MTList_len - 2],
+                       key.BList[key.MTList_len - 2],key.CList[key.MTList_len - 2],
                        &output, peer);
 
     delete[] v;
