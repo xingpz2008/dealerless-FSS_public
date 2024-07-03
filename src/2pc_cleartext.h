@@ -17,3 +17,6 @@ GroupElement cleartext_tangent(GroupElement input, int scale, bool using_lut)__a
 
 int cleartext_proximity(GroupElement xA, GroupElement yA, GroupElement xB, GroupElement yB,
                                  int scale, bool using_lut)__attribute__((optimize("O0")));
+
+int cleartext_biometric(GroupElement xA, GroupElement yA, GroupElement xB, GroupElement yB,
+                        int scale, bool using_lut)__attribute__((optimize("O0")));

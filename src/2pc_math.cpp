@@ -593,3 +593,28 @@ GroupElement proximity(int party_id, GroupElement xA, GroupElement yA, GroupElem
     delete back_output;
     return output;
 }
+
+BiometricKeyPack biometric_offline(int party_id, int Bin, int scale, bool using_lut,
+                                   int approx_segNum, int approx_deg) {
+    BiometricKeyPack output;
+
+    output.Bin = Bin;
+    output.Bout = Bin;
+    output.scale = scale;
+    output.using_lut = using_lut;
+
+    output.TangentKeyList = new TangentKeyPack[4];
+    for (int i = 0; i < 4; i++){
+        output.TangentKeyList[i] = tangent_offline(party_id, Bin, Bin, scale, using_lut, approx_segNum, approx_deg);
+    }
+
+    return output;
+}
+
+void biometric(int party_id, GroupElement xA, GroupElement yA, GroupElement xB, GroupElement yB,
+               GroupElement* output, BiometricKeyPack key){
+    tangent(party_id, xA, key.TangentKeyList[0]);
+    tangent(party_id, xB, key.TangentKeyList[1]);
+    tangent(party_id, yA, key.TangentKeyList[2]);
+    tangent(party_id, yB, key.TangentKeyList[3]);
+}

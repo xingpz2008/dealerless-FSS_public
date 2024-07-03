@@ -26,3 +26,9 @@ ProximityKeyPack proximity_offline(int party_id, int Bin, int scale, bool using_
 
 GroupElement proximity(int party_id, GroupElement xA, GroupElement yA, GroupElement xB, GroupElement yB,
                        ProximityKeyPack key)__attribute__((optimize("O0")));
+
+BiometricKeyPack biometric_offline(int party_id, int Bin, int scale, bool using_lut,
+                                   int approx_segNum, int approx_deg);
+
+void biometric(int party_id, GroupElement xA, GroupElement yA, GroupElement xB, GroupElement yB,
+               GroupElement* output, BiometricKeyPack key)__attribute__((optimize("O0")));

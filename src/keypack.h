@@ -523,3 +523,13 @@ struct ProximityKeyPack{
 inline void freeProximityKeyPack(ProximityKeyPack key){
 
 };
+
+struct BiometricKeyPack{
+    int Bin, Bout, scale;
+    bool using_lut;
+    TangentKeyPack* TangentKeyList;
+};
+
+inline void freeBiometricKeyPack(BiometricKeyPack key){
+
+}

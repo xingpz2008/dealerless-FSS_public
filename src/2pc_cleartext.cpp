@@ -389,3 +389,29 @@ int cleartext_proximity(GroupElement xA, GroupElement yA, GroupElement xB, Group
 
     return get_ulp(output, lib_output);
 }
+
+int cleartext_biometric(GroupElement xA, GroupElement yA, GroupElement xB, GroupElement yB,
+                        int scale, bool using_lut) {
+    GroupElement z0 = cleartext_tangent(xA, scale, using_lut);
+    GroupElement z1 = cleartext_tangent(xB, scale, using_lut);
+    GroupElement z2 = cleartext_tangent(yA, scale, using_lut);
+    GroupElement z3 = cleartext_tangent(yB, scale, using_lut);
+
+    float real_xA = decode_from_ge_binary(xA, xA.bitsize, scale);
+    float real_xB = decode_from_ge_binary(xB, xB.bitsize, scale);
+    float real_yA = decode_from_ge_binary(yA, yA.bitsize, scale);
+    float real_yB = decode_from_ge_binary(yB, yB.bitsize, scale);
+
+    float _lib_output_0 = tan(M_PI * real_xA);
+    float _lib_output_1 = tan(M_PI * real_xB);
+    float _lib_output_2 = tan(M_PI * real_yA);
+    float _lib_output_3 = tan(M_PI * real_yB);
+
+    GroupElement lib_output_0 = encode_to_ge_binary(_lib_output_0, xA.bitsize, scale);
+    GroupElement lib_output_1 = encode_to_ge_binary(_lib_output_1, xB.bitsize, scale);
+    GroupElement lib_output_2 = encode_to_ge_binary(_lib_output_2, yA.bitsize, scale);
+    GroupElement lib_output_3 = encode_to_ge_binary(_lib_output_3, yB.bitsize, scale);
+
+    return get_ulp(z0, lib_output_0) + get_ulp(z1, lib_output_1) + get_ulp(z2, lib_output_2) + get_ulp(z3, lib_output_3);
+
+}
