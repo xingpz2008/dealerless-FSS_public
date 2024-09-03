@@ -1036,3 +1036,200 @@ FPArray FPMath::bio(const FPArray &x0, const FPArray &x1, const FPArray &x2, con
     return output;
 }
 
+FPArray FPMath::tanh_bf16(const FPArray &x) {
+    assert(x.party != PUBLIC) ;
+    assert(x.m_bits == 7);
+    assert(x.e_bits == 8);
+
+    int sz = x.size ;
+    int m_bits, e_bits ;
+
+    m_bits = x.m_bits ;
+    e_bits = x.e_bits ;
+
+    FPArray one_flat = fp_op->input<float>(ALICE, sz, (float)1.0, m_bits, e_bits) ;
+    FPArray two_flat = fp_op->input<float>(ALICE, sz, (float)2.0, m_bits, e_bits) ;
+
+    FPArray sig = fp_op->mul(
+            this->sigmoid_bf16(
+                    fp_op->mul(two_flat, x)
+            ),
+            two_flat) ;
+    return fp_op->sub(sig, one_flat) ;
+}
+
+FPArray FPMath::tanh_fp32(const FPArray &x) {
+    assert(x.party != PUBLIC) ;
+    assert(x.m_bits == 23);
+    assert(x.e_bits == 8);
+
+    int sz = x.size ;
+    int m_bits, e_bits ;
+
+    m_bits = x.m_bits ;
+    e_bits = x.e_bits ;
+
+    FPArray one_flat = fp_op->input<float>(ALICE, sz, (float)1.0, m_bits, e_bits) ;
+    FPArray two_flat = fp_op->input<float>(ALICE, sz, (float)2.0, m_bits, e_bits) ;
+
+    FPArray sig = fp_op->mul(
+            this->sigmoid_fp32(
+                    fp_op->mul(two_flat, x)
+            ),
+            two_flat) ;
+    return fp_op->sub(sig, one_flat) ;
+}
+
+vector<FPArray> FPMath::softmax_beacon(const vector<FPArray>& x) {
+    int N = x.size();
+    int n = x[0].size;
+    int m_bits = x[0].m_bits;
+    int e_bits = x[0].e_bits;
+    assert(m_bits > 0);
+    for(int i = 1; i < N; i++) {
+        assert(x[i].party != PUBLIC);
+        assert(x[i].m_bits == m_bits);
+        assert(x[i].e_bits == e_bits);
+        assert(x[i].size == n);
+    }
+    if (x[0].m_bits == BFLOAT16_M_BITS && x[0].e_bits == BFLOAT16_E_BITS) {
+        vector<FPArray> y(x.size());
+        for (int i = 0; i < x.size(); i++) {
+            y[i] = fp_op->bfloat16_to_FP32(x[i]);
+        }
+        y = softmax_beacon(y);
+        FPArray y_concat = concat(y);
+        y_concat = fp_op->FP32_to_bfloat16(y_concat);
+        for (int i = 0; i < x.size(); i++) {
+            y[i] = y_concat.subset(i*x[0].size, (i+1)*x[0].size);
+        }
+        return y;
+    }
+    FPArray x_max = fp_op->max(x);
+    FPArray x_max_flat(party, N*n, m_bits, e_bits);
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < n; j++) {
+            x_max_flat.s[i*n + j] = x_max.s[i];
+            x_max_flat.z[i*n + j] = x_max.z[i];
+            x_max_flat.m[i*n + j] = x_max.m[i];
+            x_max_flat.e[i*n + j] = x_max.e[i];
+        }
+    }
+    FPArray x_flat = concat(x);
+    FPArray shifted_x_flat = fp_op->flip_sign(fp_op->sub(x_max_flat, x_flat, false, true, true));
+    FPArray e_x_flat = this->exp(shifted_x_flat);
+
+    vector<FPArray> e_x(N);
+    for (int i = 0; i < N; i++) {
+        e_x[i] = FPArray(party, n, m_bits, e_bits);
+        memcpy(e_x[i].s, e_x_flat.s + i*n, n*sizeof(uint8_t));
+        memcpy(e_x[i].z, e_x_flat.z + i*n, n*sizeof(uint8_t));
+        memcpy(e_x[i].m, e_x_flat.m + i*n, n*sizeof(uint64_t));
+        memcpy(e_x[i].e, e_x_flat.e + i*n, n*sizeof(uint64_t));
+    }
+    vector<FPArray> e_x_tr(n);
+    for (int i = 0; i < n; i++) {
+        e_x_tr[i] = FPArray(party, N, m_bits, e_bits);
+        for (int j = 0; j < N; j++) {
+            e_x_tr[i].s[j] = e_x[j].s[i];
+            e_x_tr[i].z[j] = e_x[j].z[i];
+            e_x_tr[i].m[j] = e_x[j].m[i];
+            e_x_tr[i].e[j] = e_x[j].e[i];
+        }
+    }
+    FPArray sum_e_x = fp_op->vector_sum(e_x);
+    vector<FPArray> ret_tr = fp_op->div(e_x_tr, sum_e_x, false);
+    vector<FPArray> ret(N);
+    for (int i = 0; i < N; i++) {
+        ret[i] = FPArray(party, n, m_bits, e_bits);
+        for (int j = 0; j < n; j++) {
+            ret[i].s[j] = ret_tr[j].s[i];
+            ret[i].z[j] = ret_tr[j].z[i];
+            ret[i].m[j] = ret_tr[j].m[i];
+            ret[i].e[j] = ret_tr[j].e[i];
+        }
+    }
+    return ret;
+}
+
+vector<FPArray> FPMath::softmax_secfloat(const vector<FPArray>& x) {
+    int N = x.size();
+    int n = x[0].size;
+    int m_bits = x[0].m_bits;
+    int e_bits = x[0].e_bits;
+    assert(m_bits > 0);
+    for(int i = 1; i < N; i++) {
+        assert(x[i].party != PUBLIC);
+        assert(x[i].m_bits == m_bits);
+        assert(x[i].e_bits == e_bits);
+        assert(x[i].size == n);
+    }
+    FPArray x_max = fp_op->max(x);
+    FPArray x_max_flat(party, N*n, m_bits, e_bits);
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < n; j++) {
+            x_max_flat.s[i*n + j] = x_max.s[i];
+            x_max_flat.z[i*n + j] = x_max.z[i];
+            x_max_flat.m[i*n + j] = x_max.m[i];
+            x_max_flat.e[i*n + j] = x_max.e[i];
+        }
+    }
+
+    FPArray x_flat = concat(x);
+    FPArray shifted_x_flat = fp_op->flip_sign(fp_op->sub(x_max_flat, x_flat, false, true, true));
+
+    FPArray e_x_flat = this->exp(shifted_x_flat);
+
+    vector<FPArray> e_x_tr(n);
+    for (int i = 0; i < n; i++) {
+        e_x_tr[i] = FPArray(party, N, m_bits, e_bits);
+        for (int j = 0; j < N; j++) {
+            e_x_tr[i].s[j] = e_x_flat.s[j*n + i];
+            e_x_tr[i].z[j] = e_x_flat.z[j*n + i];
+            e_x_tr[i].m[j] = e_x_flat.m[j*n + i];
+            e_x_tr[i].e[j] = e_x_flat.e[j*n + i];
+        }
+    }
+    FPArray sum_e_x;
+    {
+        vector<FPArray> tmp = e_x_tr;
+        int num_adds_old = n; int num_adds_curr = n/2;
+        while(num_adds_old > 1) {
+            int odd_num_adds = num_adds_old & 1;
+            vector<FPArray> lhs(num_adds_curr); vector<FPArray> rhs(num_adds_curr);
+            for (int j = odd_num_adds; j < num_adds_old && j + 1 < num_adds_old; j += 2) {
+                lhs[j/2] = tmp[j]; rhs[j/2] = tmp[j+1];
+            }
+            FPArray lhs_concat = concat(lhs);
+            FPArray rhs_concat = concat(rhs);
+            lhs_concat = fp_op->add(lhs_concat, rhs_concat);
+            for (int j = 0; j < num_adds_old && j + 1 < num_adds_old; j += 2) {
+                tmp[odd_num_adds + (j/2)] = lhs_concat.subset((j/2)*N, (j/2)*N + N);
+            }
+            num_adds_old = num_adds_curr + odd_num_adds;
+            num_adds_curr = num_adds_old/2;
+        }
+        sum_e_x = tmp[0];
+    }
+    FPArray sum_e_x_replicated(party, N*n, m_bits, e_bits);
+    for(int i = 0; i < N; i++) {
+        for (int j = 0; j < n; j++) {
+            sum_e_x_replicated.s[i*n + j] = sum_e_x.s[i];
+            sum_e_x_replicated.z[i*n + j] = sum_e_x.z[i];
+            sum_e_x_replicated.m[i*n + j] = sum_e_x.m[i];
+            sum_e_x_replicated.e[i*n + j] = sum_e_x.e[i];
+        }
+    }
+
+    FPArray ret_flat = fp_op->div(e_x_flat, sum_e_x_replicated);
+    vector<FPArray> ret(N);
+    for (int i = 0; i < N; i++) {
+        ret[i] = FPArray(party, n, m_bits, e_bits);
+        memcpy(ret[i].s, ret_flat.s + i*n, n*sizeof(uint8_t));
+        memcpy(ret[i].z, ret_flat.z + i*n, n*sizeof(uint8_t));
+        memcpy(ret[i].m, ret_flat.m + i*n, n*sizeof(uint64_t));
+        memcpy(ret[i].e, ret_flat.e + i*n, n*sizeof(uint64_t));
+    }
+    return ret;
+}
+

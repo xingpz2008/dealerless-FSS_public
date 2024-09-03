@@ -63,6 +63,11 @@ public:
 
   FPArray sigmoid_bf16(const FPArray &x);
   FPArray sigmoid_fp32(const FPArray &x);
+  FPArray tanh_bf16(const FPArray &x);
+  FPArray tanh_fp32(const FPArray &x);
+
+  vector<FPArray> softmax_beacon(const vector<FPArray>& x);
+  vector<FPArray> softmax_secfloat(const vector<FPArray>& x);
 
   FPArray prox(const FPArray &x0, const FPArray &x1, const FPArray &y0, const FPArray &y1);
   FPArray bio(const FPArray &x0, const FPArray &x1, const FPArray &x2, const FPArray &x3);
