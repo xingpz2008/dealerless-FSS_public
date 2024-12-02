@@ -1,6 +1,16 @@
-//
-// Created by root on 4/28/24.
-//
+/*
+ * Description:
+ * Author: Pengzhi Xing
+ * Email: p.xing@std.uestc.edu.cn
+ * Last Modified: 2024-12-02
+ * License: Apache-2.0 License
+ * Copyright (c) 2024 Pengzhi Xing
+ * Usage:
+ * Example:
+ *
+ * Change Log:
+ * 2024-12-02 - Initial version of the authentication module
+ */
 #include "2pc_cleartext.h"
 
 GroupElement inner_product(GroupElement* A, GroupElement* B, int size, int scale){
@@ -14,7 +24,6 @@ GroupElement inner_product(GroupElement* A, GroupElement* B, int size, int scale
 }
 
 GroupElement cleartext_sin(GroupElement input, int scale, bool using_lut){
-    // std::cout << "Claer sin." << std::endl;
     assert (((scale - 1) % 2) == 0);
     int Bin = input.bitsize;
     GroupElement output(0, Bin);
@@ -136,7 +145,6 @@ GroupElement cleartext_sin(GroupElement input, int scale, bool using_lut){
 }
 
 GroupElement cleartext_cosine(GroupElement input, int scale, bool using_lut){
-    // std::cout << "Claer sin." << std::endl;
     assert (((scale - 1) % 2) == 0);
     int Bin = input.bitsize;
     GroupElement output(0, Bin);
@@ -257,8 +265,6 @@ GroupElement cleartext_cosine(GroupElement input, int scale, bool using_lut){
 }
 
 GroupElement cleartext_tangent(GroupElement input, int scale, bool using_lut){
-    // std::cout << "Claer sin." << std::endl;
-    // assert (((scale - 1) % 2) == 0);
     int Bin = input.bitsize;
     GroupElement output(0, Bin);
     GroupElement _x_mod = segment(input, scale + 1).second;
@@ -320,7 +326,6 @@ GroupElement cleartext_tangent(GroupElement input, int scale, bool using_lut){
         mod(mask);
         for (int i = 0; i < 16; i++){
             coefs[16 + i] = coefs[16 + i] - scale_mult(coefs[i], mask, scale) - scale_mult(coefs[i], mask, scale);
-            // coefs[16 + i] = coefs[16 + i] - scale_mult(scale_mult(coefs[i], mask, scale), GroupElement(2, scale - 1, scale), scale);
             coefs[32 + i] = coefs[32 + i] + scale_mult(mask, mask, scale);
         }
         // fecth coef

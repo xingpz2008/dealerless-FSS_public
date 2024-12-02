@@ -1,6 +1,16 @@
-//
-// Created by root on 3/8/23.
-//
+/*
+ * Description: Refer to README.md
+ * Author: Pengzhi Xing
+ * Email: p.xing@std.uestc.edu.cn
+ * Last Modified: 2024-12-02
+ * License: Apache-2.0 License
+ * Copyright (c) 2024 Pengzhi Xing
+ * Usage:
+ * Example:
+ *
+ * Change Log:
+ * 2024-12-02 - Initial version of the authentication module
+ */
 
 #include "group_element.h"
 #include "comms.h"

@@ -1,4 +1,4 @@
-# LLAMA: A Low Latency Math Library for Secure Inference
+# Distributed Function Secret Sharing and Applications
 
 Implementation of protocols from the paper [LLAMA](https://eprint.iacr.org/2022/793.pdf).
 

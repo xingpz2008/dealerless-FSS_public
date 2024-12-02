@@ -1,6 +1,16 @@
-//
-// Created by root on 4/16/24.
-//
+/*
+ * Description:
+ * Author: Pengzhi Xing
+ * Email: p.xing@std.uestc.edu.cn
+ * Last Modified: 2024-12-02
+ * License: Apache-2.0 License
+ * Copyright (c) 2024 Pengzhi Xing
+ * Usage:
+ * Example:
+ *
+ * Change Log:
+ * 2024-12-02 - Initial version of the authentication module
+ */
 
 #include "2pc_math.h"
 
@@ -130,7 +140,6 @@ GroupElement sine(int party_id, GroupElement input, SineKeyPack key){
         digdec(party_id, x_frac, x_seg, key.digdec_new_bitsize, key.DigDecKey);
         // For each segment, call lut, x_seg 0 is the lowest segment
         // Here we want the shifted_vector, so call it at once
-        //GroupElement* shifted_vector_list[digdec_segNum];
         GroupElement** shifted_vector_list = new GroupElement * [digdec_segNum];
         GroupElement** publicSinList = new GroupElement * [digdec_segNum];
         GroupElement** publicCosList = new GroupElement * [digdec_segNum];
@@ -147,8 +156,6 @@ GroupElement sine(int party_id, GroupElement input, SineKeyPack key){
                        digdec_segNum, publicCosList);
         for (int i = 0; i < digdec_segNum; i++){
             // We evaluate sin, for cos, we just use the vector to do inner product
-            //std::cout << "Iteration i = " << i << ", dicdec_segNum = " << digdec_segNum << std::endl;
-            //std::cout << "x_seg[i] = " << x_seg[i].value << std::endl;
             sin_lut_output[i] = pub_lut(party_id, x_seg[i], publicSinList[i],
                                         shifted_vector_list[i], 1 << key.digdec_new_bitsize,
                                         input.bitsize, key.EvalAllKeyList[i]);
@@ -225,7 +232,6 @@ CosineKeyPack cosine_offline(int party_id, int Bin, int Bout, int scale, bool us
         }
     }else{
         // Note: this new bitsize is used for truncation, not digdec!
-        // assert((scale - 1) / digdec_new_bitsize == approx_segNum);
         output.digdec_new_bitsize = digdec_new_bitsize;
         output.approx_segNum = approx_segNum;
         output.approx_deg = approx_deg;
@@ -398,7 +404,6 @@ TangentKeyPack tangent_offline(int party_id, int Bin, int Bout, int scale, bool 
         output.EvalAllKeyList = EvalAllKeyList;
     }else{
         // Note: this new bitsize is used for truncation, not digdec!
-        // assert((scale - 1) / digdec_new_bitsize == approx_segNum);
         output.digdec_new_bitsize = -1;
         output.approx_segNum = approx_segNum;
         output.approx_deg = approx_deg;
@@ -499,8 +504,6 @@ GroupElement tangent(int party_id, GroupElement input, TangentKeyPack key){
         create_sub_lut(2, key.digdec_new_bitsize, input.bitsize, key.scale,
                        digdec_segNum, publicTanList);
         for (int i = 0; i < digdec_segNum; i++){
-            //std::cout << "Iteration i = " << i << ", dicdec_segNum = " << digdec_segNum << std::endl;
-            //std::cout << "x_seg[i] = " << x_seg[i].value << std::endl;
             tan_lut_output[i] = pub_lut(party_id, x_seg[i], publicTanList[i],
                                         shifted_vector_list[i], 1 << key.digdec_new_bitsize,
                                         input.bitsize, key.EvalAllKeyList[i]);

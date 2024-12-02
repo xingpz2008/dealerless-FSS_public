@@ -1,0 +1,152 @@
+//
+// Created by ubuntu on 7/3/24.
+//
+//
+// Created by root on 3/17/23.
+//
+#include "../../src/group_element.h"
+#include "../../src/2pc_cleartext.h"
+#include "../../src/2pc_math.h"
+#include "../../src/utils.h"
+#include <cmath>
+#include <ctime>
+#define M_PI 3.14159265358979323846
+
+using namespace sci;
+using namespace std;
+using namespace osuCrypto;
+using namespace chrono;
+
+int party = 0;
+int32_t bitlength = 32;
+int num_threads = 1;
+int port = 32000;
+std::string address = "127.0.0.1";
+int num_argmax = 1000;
+uint8_t choice_bit = 0;
+bool verbose = 1;
+int length = 1;
+Peer* client = nullptr;
+Peer* server = nullptr;
+Dealer* dealer = nullptr;
+Peer* peer = nullptr;
+extern int32_t numRounds;
+
+// endpoint: 8bit -> 0.0625; 16 /18bit-> 0.3125
+
+int bitsize = 18;
+int scale = 9;
+float left_pt = 0;
+float right_pt = 0.0625;
+int iteration_time = 10;
+
+const bool using_lut = false;
+
+/*
+MUX wrapper:
+
+void multiplexer(int party_id, uint8_t *sel, block *dataA, block *output,
+                 int32_t size, Peer* player);
+
+void multiplexer(int party_id, uint8_t *sel, uint64_t *dataA, uint64_t *output,
+                 int32_t size, int32_t bw_x, int32_t bw_y, Peer* player);
+
+void multiplexer(int party_id, uint8_t *sel, GroupElement *dataA, GroupElement *output,
+                 int32_t size, Peer* player);
+
+void multiplexer2(int party_id, uint8_t *sel, uint64_t *dataA, uint64_t *dataB, uint64_t *output,
+                  int32_t size, int32_t bw_x, int32_t bw_y, Peer* player);
+
+void multiplexer2(int party_id, uint8_t *control_bit, osuCrypto::block* dataA, osuCrypto::block* dataB,
+                          osuCrypto::block* output, int32_t size, Peer* player);
+
+void multiplexer2(int party_id, uint8_t *control_bit, GroupElement* dataA, GroupElement* dataB,
+                          GroupElement* output, int32_t size, Peer* player);
+
+*/
+
+// Note: CASE_STUDIES Test can be formulated as:
+// delta = sin^2 pi [(xA-xB)/2] + cos pi xA * cos pi xB * sin^2 pi [(yA-yB)/2]
+
+
+
+int main(int argc, char **argv){
+    ArgMapping amap;
+    amap.arg("r", party, "Role of party: ALICE = 1; BOB = 2");
+    amap.parse(argc, argv);
+
+    srand((unsigned)time(NULL));
+    float resolution = (float)1 / (1 << scale);
+    float value = (float)left_pt;
+    int test_num = (int)((right_pt - left_pt) / resolution);
+    int ulp = 0;
+    int max_delta_ulp = 0;
+    int i_max = 0;
+    int delta_ulp = 0;
+    for (int i = 0; i < test_num; i++){
+        GroupElement xA(randint_range(0, encode_to_ge_binary(right_pt, bitsize, scale)), bitsize);
+        GroupElement xB(randint_range(0, encode_to_ge_binary(right_pt, bitsize, scale)), bitsize);
+        GroupElement yA(randint_range(0, encode_to_ge_binary(right_pt, bitsize, scale)), bitsize);
+        GroupElement yB(randint_range(0, encode_to_ge_binary(right_pt, bitsize, scale)), bitsize);
+
+        float real_xA = decode_from_ge_binary(xA, bitsize, scale);
+        float real_xB = decode_from_ge_binary(xB, bitsize, scale);
+        float real_yA = decode_from_ge_binary(yA, bitsize, scale);
+        float real_yB = decode_from_ge_binary(yB, bitsize, scale);
+
+        // Wrapper: GroupElement cleartext_proximity(GroupElement xA, GroupElement yA, GroupElement xB, GroupElement yB, ...)
+        delta_ulp = cleartext_biometric(xA, yA, xB, yB, scale, using_lut);
+        if (delta_ulp > max_delta_ulp){
+            i_max = i;
+            max_delta_ulp = delta_ulp;
+        }
+        ulp += delta_ulp;
+    }
+
+    // MPC ciphertext calculation
+    auto start = std::chrono::high_resolution_clock::now();
+    auto end = std::chrono::high_resolution_clock::now();
+    auto offline_duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    auto online_duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    uint64_t init_byte, rounds;
+    uint64_t mid_byte, mid_rounds;
+
+    if(party==CLIENT){
+        cout << "Client execution." << endl;
+        server = new Peer(address, port);
+        peer = server;
+        init_byte = peer->bytesSent;
+        rounds = peer->rounds;
+    }
+    else{
+        cout << "Server execution." << endl;
+        //server = new Peer(address, port);
+        client = waitForPeer(port);
+        peer = client;
+        init_byte = peer->bytesSent;
+        rounds = peer->rounds;
+    }
+
+    start = std::chrono::high_resolution_clock::now();
+    BiometricKeyPack key = biometric_offline(party, bitsize, scale, using_lut,16, 2);
+
+    mid_byte = peer->bytesSent - init_byte;
+    mid_rounds = peer->rounds - rounds;
+    end = std::chrono::high_resolution_clock::now();
+    offline_duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+
+    std::cout << "END OF OFFLINE" << std::endl;
+
+    start = std::chrono::high_resolution_clock::now();
+    for (int i = 0; i < iteration_time; i++){
+        biometric(party, GroupElement(1, bitsize), GroupElement(1, bitsize),
+                  GroupElement(1, bitsize), GroupElement(1, bitsize), NULL, key);
+    }
+    end = std::chrono::high_resolution_clock::now();
+    online_duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+
+
+    std::cout << "[Accuracy] Accumulated ULP error = " << ulp << " within " << test_num << " testcases, avg_ULP = " << (float)ulp / test_num << std::endl;
+    std::cout << "[Offline Performance] Bytes Sent(Bytes) = " << mid_byte << " , Rounds = " << mid_rounds << ", Time(MicroSec) " << offline_duration << std::endl;
+    std::cout << "[Online Performance(10x)] Bytes Sent(Bytes) = " << peer->bytesSent - mid_byte << " , Rounds = " << peer->rounds - mid_rounds << ", Time(MicroSec) " << online_duration << std::endl;
+}

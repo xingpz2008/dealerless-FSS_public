@@ -1,7 +1,9 @@
 /*
-Authors: Deepak Kumaraswamy, Kanav Gupta
+Original Authors: Deepak Kumaraswamy, Kanav Gupta
+Modified by: Pengzhi Xing
 Copyright:
-Copyright (c) 2022 Microsoft Research
+Original Copyright (c) 2022 Microsoft Research
+Copyright (c) 2024 Pengzhi Xing
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights
@@ -21,51 +23,7 @@ SOFTWARE.
 
 #include "comms.h"
 #include "api.h"
-#include <cassert>
 
-/*
-Peer::Peer(std::string ip, int port) {
-    std::cerr << "trying to connect with server...";
-    {
-        recvsocket = socket(AF_INET, SOCK_STREAM, 0);
-        if (recvsocket < 0) {
-            perror("socket");
-            exit(1);
-        }
-        struct sockaddr_in addr;
-        addr.sin_family = AF_INET;
-        addr.sin_port = htons(port);
-        addr.sin_addr.s_addr = inet_addr(ip.c_str());
-        if (connect(recvsocket, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
-            perror("connect");
-            exit(1);
-        }
-        const int one = 1;
-        setsockopt(recvsocket, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
-    }
-    sleep(1);
-    {
-        sendsocket = socket(AF_INET, SOCK_STREAM, 0);
-        if (sendsocket < 0) {
-            perror("socket");
-            exit(1);
-        }
-        struct sockaddr_in addr;
-        addr.sin_family = AF_INET;
-        addr.sin_port = htons(port+3);
-        addr.sin_addr.s_addr = inet_addr(ip.c_str());
-        if (connect(sendsocket, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
-            perror("connect");
-            exit(1);
-        }
-        const int one = 1;
-        setsockopt(sendsocket, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
-    }
-    iopack_ = new sci::IOPack(party-1, port);
-    otpack = new sci::OTPack(iopack_, party-1);
-    std::cerr << "connected" << std::endl;
-}
- */
 
 Peer::Peer(std::string ip, int port) {
     std::cerr << "trying to connect with server...";
@@ -226,7 +184,6 @@ void Peer::send_ge(const GroupElement &g, int bw) {
         }
         bytesSent += 1;
     }
-    //std::cout << "In send GE, bytes added by " << bw / 4 << std::endl;
     rounds++;
 }
 
@@ -238,7 +195,6 @@ void Peer::send_block(const osuCrypto::block &b) {
         send(sendsocket, buf, sizeof(osuCrypto::block), 0);
     }
     bytesSent += sizeof(osuCrypto::block);
-    //std::cout << "In send block, bytes added by " << sizeof(osuCrypto::block)<< std::endl;
     rounds++;
 }
 
@@ -265,7 +221,6 @@ void Peer::send_u8(const u8 &b){
     }
     bytesSent += sizeof(u8);
     rounds++;
-    //std::cout << "In send u8, bytes added by " << sizeof(u8)<< std::endl;
 }
 
 void Peer::send_u8(u8* b, int size){
@@ -330,7 +285,6 @@ void Peer::send_u64(const uint64_t &b){
         send(sendsocket, buf, sizeof(uint64_t), 0);
     }
     bytesSent += sizeof(uint64_t);
-    //std::cout << "In send u64, bytes added by " << sizeof(uint64_t)<< std::endl;
     rounds++;
 }
 
@@ -428,7 +382,6 @@ void Peer::send_batched_input(GroupElement *g, int size, int bw)
         bytesSent += size;
     }
     rounds++;
-    //std::cout << "In send batched input, bytes added by " << size * bw / 4<< std::endl;
 }
 
 void Peer::recv_batched_input(uint64_t *g, int size, int bw)
@@ -697,14 +650,10 @@ GroupElement Peer::recv_input() {
 }
 
 void Peer::send_cot(uint64_t data, uint64_t* output, int length) {
-    //uint64_t pre_comm = otpack->iopack->io->counter;
-    //uint64_t pre_rounds = otpack->iopack->io->num_rounds;
     uint64_t pre_comm = otpack->iknp_straight->io->counter;
     uint64_t pre_rounds = otpack->iknp_straight->io->num_rounds;
     otpack->iknp_straight->send_cot(output, &data, length, 64);
     rounds+= (otpack->iknp_straight->io->num_rounds - pre_rounds);
-    //std::cout << "In send u64 COT, bytes added by " << (otpack->iknp_straight->io->counter - pre_comm) << std::endl;
-    //std::cout << "[Send]Rounds added with COT for " << (otpack->iknp_straight->io->num_rounds - pre_rounds) << " rounds with size " << length << std::endl;
     bytesSent += (otpack->iknp_straight->io->counter - pre_comm);
 }
 
@@ -722,19 +671,14 @@ void Peer::send_cot(GroupElement* data, GroupElement* output, int length, bool u
         otpack->iknp_reversed->send_cot(_output, uint64_t_data, length, data->bitsize);
         rounds += (otpack->iknp_reversed->io->num_rounds - pre_rounds);
         bytesSent += (otpack->iknp_reversed->io->counter - pre_comm);
-        //std::cout << "In send batched GE COT (iknp-r), bytes added by " << (otpack->iknp_reversed->io->counter - pre_comm) << std::endl;
-        //std::cout << "[Send]Rounds added with COT (iknp-r) for " << (otpack->iknp_reversed->io->num_rounds - pre_rounds) << " rounds with size " << length << std::endl;
     }else{
         pre_comm = otpack->iknp_straight->io->counter;
         pre_rounds = otpack->iknp_straight->io->num_rounds;
         otpack->iknp_straight->send_cot(_output, uint64_t_data, length, data->bitsize);
         rounds += (otpack->iknp_straight->io->num_rounds - pre_rounds);
         bytesSent += (otpack->iknp_straight->io->counter - pre_comm);
-        //std::cout << "In send batched GE COT (iknp-s), bytes added by " << (otpack->iknp_straight->io->counter - pre_comm) << std::endl;
-        //std::cout << "[Send]Rounds added with COT (iknp-s) for " << (otpack->iknp_straight->io->num_rounds - pre_rounds) << " rounds with size " << length << std::endl;
     }
     for (int i = 0; i < length; i++){
-        //std::cout << "In send_cot, " << i << "th output for sender is " << _output[i]%(1ULL<<data->bitsize) << " with input " << data->value%(1ULL<<data->bitsize)<< std::endl;
         output[i].value = _output[i];
         output[i].bitsize = data->bitsize;
     }
@@ -745,8 +689,6 @@ void Peer::recv_cot(uint64_t* recv_arr, int size, uint8_t* sel){
     uint64_t pre_rounds = otpack->iknp_straight->io->num_rounds;
     otpack->iknp_straight->recv_cot(recv_arr, (bool*)sel, size, 64);
     rounds += (otpack->iknp_straight->io->num_rounds - pre_rounds);
-    //std::cout << "In recv batched u64 COT, bytes added by " << (otpack->iknp_straight->io->counter - pre_comm) << std::endl;
-    //std::cout << "[Recv]Rounds added with COT for " << (otpack->iknp_straight->io->num_rounds - pre_rounds) << " rounds with size " << size << std::endl;
     bytesSent += (otpack->iknp_straight->io->counter - pre_comm);
 }
 
@@ -760,37 +702,25 @@ void Peer::recv_cot(GroupElement* recv_arr, int size, uint8_t* sel, bool using_a
         otpack->iknp_reversed->recv_cot(recv_value_arr, (bool*)sel, size, recv_arr->bitsize);
         rounds += (otpack->iknp_reversed->io->num_rounds - pre_rounds);
         bytesSent += (otpack->iknp_reversed->io->counter - pre_comm);
-        //std::cout << "In recv batched GE COT (iknp-r), bytes added by " << (otpack->iknp_reversed->io->counter - pre_comm) << std::endl;
-        //std::cout << "[Recv]Rounds added with COT (iknp-r) for " << (otpack->iknp_reversed->io->num_rounds - pre_rounds) << " rounds with size " << size << std::endl;
     }else{
         pre_comm = otpack->iknp_straight->io->counter;
         pre_rounds = otpack->iknp_straight->io->num_rounds;
         otpack->iknp_straight->recv_cot(recv_value_arr, (bool*)sel, size, recv_arr->bitsize);
         rounds += (otpack->iknp_straight->io->num_rounds - pre_rounds);
         bytesSent += (otpack->iknp_straight->io->counter - pre_comm);
-        //std::cout << "In recv batched GE COT (iknp-s), bytes added by " << (otpack->iknp_straight->io->counter - pre_comm) << std::endl;
-        //std::cout << "[Recv]Rounds added with COT (iknp-s) for " << (otpack->iknp_straight->io->num_rounds - pre_rounds) << " rounds with size " << size << std::endl;
     }
-    // peer->sync();
     for (int i = 0; i < size; i++){
-        //std::cout << "In recv_cot, " << i << "th output for receiver is " << recv_value_arr[i] %(recv_arr[0].bitsize)<< std::endl;
         recv_arr[i].value = recv_value_arr[i];
     }
     return;
 }
 
 void Peer::send_cot(osuCrypto::block input, osuCrypto::block* output, int size){
-    //std::cout << "Send beacon 1\n" ;
     uint64_t pre_comm =otpack->iknp->io->counter;
-    //std::cout << "Send beacon 1.1\n" ;
     uint64_t pre_rounds = otpack->iknp->io->num_rounds;
-    //std::cout << "Send beacon 2\n";
     otpack->iknp->send_cot(output, input, size);
     rounds += (otpack->iknp->io->num_rounds - pre_rounds);
-    //std::cout << "In send btached block COT, bytes added by " << (otpack->iknp->io->counter - pre_comm) << std::endl;
-    //std::cout << "[Send]Rounds added with COT for " << (otpack->iknp->io->num_rounds - pre_rounds) << " rounds with size " << size << std::endl;
     bytesSent += (otpack->iknp->io->counter - pre_comm);
-    //std::cout<< "Send beacon 3\n";
 }
 
 void Peer::recv_cot(osuCrypto::block* recv_arr, int size, bool* sel){
@@ -798,8 +728,6 @@ void Peer::recv_cot(osuCrypto::block* recv_arr, int size, bool* sel){
     uint64_t pre_rounds = otpack->iknp->io->num_rounds;
     otpack->iknp->recv_cot(recv_arr, sel, size);
     rounds += (otpack->iknp->io->num_rounds - pre_rounds);
-    //std::cout << "In recv block COT, bytes added by " << (otpack->iknp->io->counter - pre_comm) << std::endl;
-    //std::cout << "[Recv]Rounds added with COT for " << (otpack->iknp->io->num_rounds - pre_rounds) << " rounds with size " << size << std::endl;
     bytesSent += (otpack->iknp->io->counter - pre_comm);
 }
 
@@ -815,8 +743,6 @@ void Peer::mill(uint8_t *res, uint64_t *data, int num_cmps, int bitlength,
     uint64_t delta_round_kkot = MillInstance->otpack->kkot[MillInstance->beta - 1]->io->num_rounds - pre_round_kkot;
     uint64_t delta_com_iknp_s = MillInstance->otpack->iknp_straight->io->counter - pre_com_iknp_s;
     uint64_t delta_round_iknp_s = MillInstance->otpack->iknp_straight->io->num_rounds - pre_round_iknp_s;
-    //std::cout << "In F_Mill, bytes added by " << delta_com_kkot + delta_com_iknp_s << std::endl;
-    //std::cout << "In F_Mill, rounds added by " << delta_round_kkot + delta_round_iknp_s << std::endl;
     rounds += (delta_round_iknp_s + delta_round_kkot);
     bytesSent += (delta_com_iknp_s + delta_com_kkot);
 }
@@ -1205,24 +1131,6 @@ void Peer::sync() {
     always_assert(buf[0] == 1);
 }
 
-/*
-void Peer::send_cot(block delta, block* output_data, int size) {
-    // block: long long int, send_cot_primitives: uint 64t, aka unsigned long
-    uint64_t pre_comm = otpack->iopack->io->counter;
-    uint64_t pre_rounds = otpack->iopack->io->num_rounds;
-    otpack->iknp->send_cot(output_data, delta, size);
-    numRounds += (otpack->iopack->io->num_rounds - pre_rounds);
-    bytesSent += (otpack->iopack->io->counter - pre_comm);
-}
-
-void Peer::recv_cot(block *recv_arr, int size, uint8_t *sel) {
-    uint64_t pre_comm = otpack->iopack->io->counter;
-    uint64_t pre_rounds = otpack->iopack->io->num_rounds;
-    otpack->iknp->recv_cot(recv_arr, (bool*)sel, size);
-    numRounds += (otpack->iopack->io->num_rounds - pre_rounds);
-    bytesSent += (otpack->iopack->io->counter - pre_comm);
-}
-*/
 
 SignedPublicDivKeyPack Dealer::recv_signedpubdiv_key(int Bin, int Bout) {
     SignedPublicDivKeyPack kp;

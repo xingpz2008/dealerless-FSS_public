@@ -1,7 +1,9 @@
 /*
-Authors: Deepak Kumaraswamy, Kanav Gupta
+Original Authors: Deepak Kumaraswamy, Kanav Gupta
+Modified by: Pengzhi Xing
 Copyright:
-Copyright (c) 2022 Microsoft Research
+Original Copyright (c) 2022 Microsoft Research
+Copyright (c) 2024 Pengzhi Xing
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights
@@ -64,10 +66,6 @@ public:
     sci::IOPack *iopack_;
     sci::OTPack *otpack;
     MillionaireProtocol *MillInstance = NULL;
-    //sci::IOPack *iopack_= new sci::IOPack(party, port);
-    //sci::OTPack *otpack = new sci::OTPack(iopack_, party);
-    //this->iopack = new sci::IOPack(party, port);
-    //this->otpack = new sci::OTPack(this->iopack, party);
 
     Peer(std::string ip, int port);
     Peer(int sendsocket, int recvsocket) {
@@ -76,7 +74,6 @@ public:
         // Here we change party number from 2S 3C to 1S, 2C
         this->iopack_= new sci::IOPack(party-1, port);
         this->otpack = new sci::OTPack(this->iopack_, party-1);
-        //std::cout << this->otpack->iopack->get_comm() << "Init finalized\n";
         if (this->MillInstance == NULL){
             this->MillInstance = new MillionaireProtocol(party - 1, iopack_, otpack);
         }

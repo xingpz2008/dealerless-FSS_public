@@ -1,11 +1,20 @@
-//
-// Created by  邢鹏志 on 2023/1/31.
-//
+/*
+ * Description:
+ * Author: Pengzhi Xing
+ * Email: p.xing@std.uestc.edu.cn
+ * Last Modified: 2024-12-02
+ * License: Apache-2.0 License
+ * Copyright (c) 2024 Pengzhi Xing
+ * Usage:
+ * Example:
+ *
+ * Change Log:
+ * 2024-12-02 - Initial version of the authentication module
+ */
 
 #include "2pc_dcf.h"
 
 using namespace osuCrypto;
-// uint64_t aes_evals_count = 0;
 
 #define SERVER0 0
 #define SERVER1 1
@@ -37,7 +46,6 @@ iDCFKeyPack keyGeniDCF(int party_id, int Bin, int Bout,
     // Step 1: prepare for the DigDec decomposition of x from msb to lsb
     // Particularly, we construct from lsb to msb, then reverse it.
     // For masked iDCF, we create mask in iDCF Gen func.
-    //std::cout << "==========iDCF Gen==========" << std::endl;
     u8* real_idx = new u8[Bin];
     u8 level_and_res = 0;
     GroupElement* mask = new GroupElement(0, Bin);
@@ -49,10 +57,7 @@ iDCFKeyPack keyGeniDCF(int party_id, int Bin, int Bout,
     }
     for (int i = 0; i < Bin; i++) {
         real_idx[Bin - i - 1] = idx[Bin - i - 1] ^ level_and_res;
-        //std::cout << "Idx (from lsb) = " << (int) idx[Bin - i - 1] << std::endl;
-        //std::cout << "Real idx " << Bin - i - 1 << "= " << (int)real_idx[Bin - i - 1];
         level_and_res = check_bit_overflow(party_id, idx[Bin - i - 1], level_and_res, peer);
-        //std::cout << ", level and res = " << (int)level_and_res << std::endl;
     }
 
     // Step 2: prepare payload list
@@ -61,12 +66,7 @@ iDCFKeyPack keyGeniDCF(int party_id, int Bin, int Bout,
     for (int i = 0; i < Bin; i++){
         tmp_payload[i] = GroupElement(payload->value, payload->bitsize);
         real_payload[i].bitsize = Bout;
-        //multiplexer(party_id, &real_idx[i], &tmp_payload[i], &real_payload[i], Bin, peer);
     }
-    //multiplexer(party_id, real_idx, tmp_payload, real_payload, Bin, peer);
-
-
-    // TODO: Replace insecure wrapper with real protocol
     multiplexer(party_id, real_idx, tmp_payload, real_payload, Bin, peer);
 
 
@@ -319,23 +319,16 @@ void evaliDCFNext(int party, uint64_t idx, block* st_s, u8* st_t, block* cw, u8*
         nextLevelSeedTemp = ct[idx];
         nextLevelControlBitTemp = lsb(ct[idx]);
     }
-    //std:: cout << "In EvalNext, 2. bit size = " << W_cw.bitsize << "."<< std::endl;
 
     // Make conversion
     uint64_t W;
 
-    //W = 0;
-    //*res_s = osuCrypto::toBlock((u8)0);
     two_pc_convert(y->bitsize, &nextLevelSeedTemp, &W, res_s);
-    //std:: cout << "In EvalNext, 3. bit size = " << W_cw.bitsize << "."<< std::endl;
 
     // Transfer t
     *res_t = nextLevelControlBitTemp;
     GroupElement sign = GroupElement(party==2?0:(-1), W_cw.bitsize);
-    //GroupElement _W_cw(W_cw->value, W_cw->bitsize);
-    //std::cout << "In EvalNext, original bit size = " << W_cw.bitsize << "."<< std::endl;
     *y = sign * (W + ((nextLevelControlBitTemp == (u8)1) ?W_cw : 0));
-    //std::cout << "In EvalNext, afterward bit size = " << W_cw.bitsize << "."<< std::endl;
 }
 
 void evaliDCF(int party, GroupElement *res, GroupElement idx, const iDCFKeyPack key, bool masked){
@@ -344,7 +337,6 @@ void evaliDCF(int party, GroupElement *res, GroupElement idx, const iDCFKeyPack 
     // k: Scw, 0 for root seed, loop start from 1
     // g: Wcw, mask term in Group, don't have to modify
     // v: Tcw, control bit correction, don't have to modify
-    std::cout << "==========iDCF Eval==========" << std::endl;
 
     // Parse DCF Key
     block st = key.k[0];
@@ -534,8 +526,6 @@ void evalNewDCF(int party, GroupElement* res, GroupElement* idx, newDCFKeyPack* 
     block levelNodes[size];
     uint64_t* converted_val = new uint64_t[size];
     block* null_block = new block[size];
-    //uint64_t converted_val[size];
-    //block null_block[size];
 
     static const block notOneBlock = osuCrypto::toBlock(~0, ~1);
     static const block notThreeBlock = osuCrypto::toBlock(~0, ~3);

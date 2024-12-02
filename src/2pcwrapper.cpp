@@ -1,6 +1,16 @@
-//
-// Created by root on 3/8/23.
-//
+/*
+ * Description: Refer to README.md
+ * Author: Pengzhi Xing
+ * Email: p.xing@std.uestc.edu.cn
+ * Last Modified: 2024-12-02
+ * License: Apache-2.0 License
+ * Copyright (c) 2024 Pengzhi Xing
+ * Usage:
+ * Example:
+ *
+ * Change Log:
+ * 2024-12-02 - Initial version of the authentication module
+ */
 
 #include "2pcwrapper.h"
 
@@ -18,31 +28,19 @@ void _multiplexer(int party_id, uint8_t *sel, block *dataA, block *output,
         localTemp[i] = (*sel == 0 ? ZeroBlock: dataA[i]);
         localShares[i] = dataA[i] - localTemp[i] * 2;
     }
-    //bool new_sel=1;
-    //block recons;
     switch(party_id){
         case 2:{
             for (int i=0; i < size; i++){
                 player->send_cot(localShares[i], OTRes + i * sizeof(block), 1);
-                //player->send_block(OTRes[i]);
-                //std::cout << localShares[i] << std::endl;
                 player->recv_cot(AnotherOTRes + i * sizeof(block), 1, (bool*)sel);
-                //player->send_block(AnotherOTRes[i]);
             }
-            //std::cout << "player2" << std::endl;
             break;
         }
         case 3:{
             for (int i=0; i < size; i++){
                 player->recv_cot(OTRes + i * sizeof(block), 1, (bool*)sel);
-                //block recv = player->recv_block();
-                //block recons = xorBlocks(recv, OTRes[i]);
                 player->send_cot(localShares[i], AnotherOTRes + i * sizeof(block), 1);
-                //block recv = player->recv_block();
-                //recons = xorBlocks(recv, AnotherOTRes[i]);
-                //std::cout << recons << std::endl;
             }
-            //std::cout << "player3" << std::endl;
             break;
         }
         default:
@@ -59,37 +57,22 @@ void multiplexer(int party_id, uint8_t *sel, block *dataA, block *output,
     block* localTemp = new block[size];
     block* OTRes = new block[size];
     block* AnotherOTRes = new block[size];
-    //block localTemp[size];
-    //block OTRes[size];
-    //block AnotherOTRes[size];
     for (int i = 0; i < size; i++){
         localTemp[i] = (*sel == 0 ? ZeroBlock: dataA[i]);
     }
-    //bool new_sel=1;
-    //block recons;
     switch(party_id){
         case 2:{
             for (int i=0; i < size; i++){
                 player->send_cot(dataA[i], &(OTRes[i]), 1);
-                //player->send_block(OTRes[i]);
-                //std::cout << localShares[i] << std::endl;
                 player->recv_cot(&(AnotherOTRes[i]), 1, (bool*)sel);
-                //player->send_block(AnotherOTRes[i]);
             }
-            //std::cout << "player2" << std::endl;
             break;
         }
         case 3:{
             for (int i=0; i < size; i++){
                 player->recv_cot(&(OTRes[i]), 1, (bool*)sel);
-                //block recv = player->recv_block();
-                //block recons = xorBlocks(recv, OTRes[i]);
                 player->send_cot(dataA[i], &(AnotherOTRes[i]), 1);
-                //block recv = player->recv_block();
-                //recons = xorBlocks(recv, AnotherOTRes[i]);
-                //std::cout << recons << std::endl;
             }
-            //std::cout << "player3" << std::endl;
             break;
         }
         default:
@@ -160,7 +143,6 @@ void multiplexer(int party_id, uint8_t *sel, GroupElement *dataA, GroupElement *
             for (int i=0; i < size; i++){
                 player->send_cot(&(localShares[i]), &OTRes[i], 1, true);
                 player->recv_cot(&AnotherOTRes[i], 1, sel, true);
-                //std::cout << "The " << i << "th res, localS = " << localShares[i].value<<", OTR = " << OTRes[i].value % (1ULL << OTRes[i].bitsize) << ", AR = " << AnotherOTRes[i].value % (1ULL<<AnotherOTRes[i].bitsize)<<std::endl;
             }
             break;
         }
@@ -168,7 +150,6 @@ void multiplexer(int party_id, uint8_t *sel, GroupElement *dataA, GroupElement *
             for (int i=0; i < size; i++){
                 player->recv_cot(&OTRes[i], 1, sel, true);
                 player->send_cot(&(localShares[i]), &AnotherOTRes[i], 1, true);
-                //std::cout << "The " << i << "th res,  localS = " << localShares[i].value<<", OTR = " << OTRes[i].value%((1ULL << OTRes[i].bitsize)) << ", AR = " << AnotherOTRes[i].value%((1ULL << AnotherOTRes[i].bitsize))<<std::endl;
             }
             break;
         }
@@ -228,25 +209,16 @@ void multiplexer2(int party_id, uint8_t* control_bit, osuCrypto::block* dataA, o
 
     osuCrypto::block a_minus_b[size];
 
-    //std::cout << "In mux2, dataA = " << dataA[0] << " , B = " << dataB[0] << std::endl;
-
     for (int i=0; i<size; i++){
         a_minus_b[i] = dataA[i] xor dataB[i];
     }
 
     uint8_t real_sel = *control_bit ^ ((u8)(party_id-2));
-    //std::cout << "In mux2, bit = " << (int)real_sel << std::endl;
-    //std::cout << "size=" << size << std::endl;
     multiplexer(party_id, &real_sel, a_minus_b, output, size, player);
-    //std::cout << "In mux2, mux out = " << output[0] << std::endl;
-    //void multiplexer(int party_id, uint8_t *sel, block *dataA, block *output,
-    //                 int32_t size, Peer* player)
 
     for (int i=0; i<size; i++){
         output[i] = output[i] xor dataB[i];
     }
-    //std::cout << "In mux2, out = " << output[0]  << std::endl;
-    //std::cout << "end of mux2" << std::endl;
 }
 
 void multiplexer2(int party_id, uint8_t *control_bit, GroupElement* dataA, GroupElement* dataB,
@@ -328,7 +300,6 @@ void insecure_multiplexer(int party_id, uint8_t *control_bit, GroupElement* data
                 }
             }
             break;
-            std::cout << std::endl;
         }
     }
 }
@@ -357,13 +328,6 @@ u8 and_wrapper(int party_id, u8 dataA, u8 dataB, Peer* player){
     player->recv_u8(_ef, 2);
     u8 _e = _ef[0];
     u8 _f = _ef[1];
-    /*
-    player->send_u8(e);
-    u8 _e = player->recv_u8();
-
-    player->send_u8(f);
-    u8 _f = player->recv_u8();
-    */
 
     e = e xor _e;
     f = f xor _f;
@@ -394,8 +358,6 @@ void and_wrapper(int party_id, u8* dataA, u8* dataB, u8* output, int size, Peer*
         ef[i] = e[i];
         ef[i + size] = f[i];
     }
-
-
 
     // send them to another party
     u8 _e[size];
@@ -665,10 +627,7 @@ void beaver_mult_offline(int party_id, GroupElement* a, GroupElement* b, GroupEl
     // Here we have to invoke OT for generating cross-term c
     // we also have to call rpg
     // This function is optimized with batch operation
-    std::cout << "[WARNING] Beaver offline" << std::endl;
     srand((unsigned)time(NULL));
-    // GroupElement shareC0[size];
-    // GroupElement shareC1[size];
     GroupElement* OTshareC = new GroupElement[2 * size];
     GroupElement* OTinputAB = new GroupElement[2 * size];
     GroupElement localShareC[size];
@@ -680,8 +639,6 @@ void beaver_mult_offline(int party_id, GroupElement* a, GroupElement* b, GroupEl
 
         // Invoke OT for cross term generation
         localShareC[i] = GroupElement(a_value * b_value, c[i].bitsize);
-        // shareC0[i] = GroupElement(0, c[i].bitsize);
-        // shareC1[i] = GroupElement(0, c[i].bitsize);
         OTshareC[2 * i] = GroupElement(0, c[i].bitsize);
         OTshareC[2 * i + 1] = GroupElement(0, c[i].bitsize);
         if (party_id == 2){
@@ -700,14 +657,10 @@ void beaver_mult_offline(int party_id, GroupElement* a, GroupElement* b, GroupEl
     switch (party_id){
         case 2:{
             cross_term_gen(party_id, OTinputAB, OTshareC, true, 2 * size, player);
-            //shareC0 = cross_term_gen(party_id, &a[i], true, player);
-            //shareC1 = cross_term_gen(party_id, &b[i], true, player);
             break;
         }
         case 3:{
             cross_term_gen(party_id, OTinputAB, OTshareC, false, 2 * size, player);
-            //shareC0 = cross_term_gen(party_id, &b[i], false, player);
-            //shareC1 = cross_term_gen(party_id, &a[i], false, player);
             break;
         }
         default:{
@@ -717,7 +670,6 @@ void beaver_mult_offline(int party_id, GroupElement* a, GroupElement* b, GroupEl
     for (int i = 0; i < size; i++){
         c[i] = localShareC[i] + OTshareC[i] + OTshareC[i + size];
     }
-    //c[i] = localShareC + shareC0 + shareC1;
     delete[] OTshareC;
     delete[] OTinputAB;
 }

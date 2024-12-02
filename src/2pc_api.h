@@ -1,7 +1,16 @@
-//
-// Created by root on 12/6/23.
-//
-
+/*
+ * Description:
+ * Author: Pengzhi Xing
+ * Email: p.xing@std.uestc.edu.cn
+ * Last Modified: 2024-12-02
+ * License: Apache-2.0 License
+ * Copyright (c) 2024 Pengzhi Xing
+ * Usage:
+ * Example:
+ *
+ * Change Log:
+ * 2024-12-02 - Initial version of the authentication module
+ */
 #include "2pc_idpf.h"
 #include "2pc_dcf.h"
 #include "2pcwrapper.h"

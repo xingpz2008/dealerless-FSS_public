@@ -1,6 +1,16 @@
-//
-// Created by  邢鹏志 on 2023/1/31.
-//
+/*
+ * Description:
+ * Author: Pengzhi Xing
+ * Email: p.xing@std.uestc.edu.cn
+ * Last Modified: 2024-12-02
+ * License: Apache-2.0 License
+ * Copyright (c) 2024 Pengzhi Xing
+ * Usage:
+ * Example:
+ *
+ * Change Log:
+ * 2024-12-02 - Initial version of the authentication module
+ */
 
 #pragma once
 #include <array>
@@ -15,9 +25,6 @@
 #include "2pc_idpf.h"
 
 using namespace osuCrypto;
-
-// extern uint64_t aes_evals_count;
-
 
 iDCFKeyPack keyGeniDCF(int party_id, int Bin, int Bout, GroupElement idx, GroupElement* payload, bool masked = true)
 __attribute__((optimize("O0")));

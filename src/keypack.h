@@ -1,7 +1,9 @@
 /*
-Authors: Deepak Kumaraswamy, Kanav Gupta
+Original Authors: Deepak Kumaraswamy, Kanav Gupta
+Modified by: Pengzhi Xing
 Copyright:
-Copyright (c) 2022 Microsoft Research
+Original Copyright (c) 2022 Microsoft Research
+Copyright (c) 2024 Pengzhi Xing
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights
@@ -17,8 +19,9 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-*/
 
+Note: Part of freeKey functions are to be completed.
+*/
 #pragma once
 
 #include <cryptoTools/Common/Defines.h>
@@ -357,14 +360,6 @@ struct ModularKeyPack{
 };
 
 inline void freeModularKeyPack(ModularKeyPack key){
-    /*block* k;
-    u8* v;
-    GroupElement* beta_0;
-    GroupElement* g;
-    GroupElement* random_mask;
-    GroupElement* a;
-    GroupElement* b;
-    GroupElement* c;*/
     freeComparisonKeyPack(key.ComparisonKey);
 }
 
@@ -521,7 +516,7 @@ struct ProximityKeyPack{
 };
 
 inline void freeProximityKeyPack(ProximityKeyPack key){
-
+    // TODO: Implement this.
 };
 
 struct BiometricKeyPack{
@@ -531,5 +526,5 @@ struct BiometricKeyPack{
 };
 
 inline void freeBiometricKeyPack(BiometricKeyPack key){
-
+    // TODO: Implement this.
 }
