@@ -164,12 +164,10 @@ void reconstruct(u8* input)
 }
 
 void reconstruct(GroupElement* input){
-    std::cout << "Rec input : " << input->value << std::endl;
     peer->send_batched_input(input, 1, input->bitsize);
     uint64_t value;
     peer->recv_batched_input(&value, 1, input->bitsize);
     GroupElement tmp(value, input->bitsize);
-    std::cout << "Rec recv : " << tmp.value << std::endl;
     *input = *input + tmp;
 
     numRounds += 1;

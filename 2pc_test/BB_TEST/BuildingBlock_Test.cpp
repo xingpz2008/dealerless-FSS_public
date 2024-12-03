@@ -1,10 +1,16 @@
-//
-// Created by root on 6/22/24.
-//
-
-//
-// Created by  邢鹏志 on 2023/2/5.
-//
+/*
+ * Description: Refer to README.md
+ * Author: Pengzhi Xing
+ * Email: p.xing@std.uestc.edu.cn
+ * Last Modified: 2024-12-02
+ * License: Apache-2.0 License
+ * Copyright (c) 2024 Pengzhi Xing
+ * Usage:
+ * Example:
+ *
+ * Change Log:
+ * 2024-12-02 - Initial version of the authentication module
+ */
 #include "../../src/2pc_idpf.h"
 #include "../../src/group_element.h"
 #include "../../src/ArgMapping.h"

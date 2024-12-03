@@ -1,5 +1,5 @@
 /*
- * Description:
+ * Description: Refer to README.md
  * Author: Pengzhi Xing
  * Email: p.xing@std.uestc.edu.cn
  * Last Modified: 2024-12-02
@@ -15,19 +15,6 @@
 #include "2pc_dcf.h"
 
 using namespace osuCrypto;
-
-#define SERVER0 0
-#define SERVER1 1
-#define GROUP_LOOP(s)                  \
-    int lp = (evalGroupIdxStart + groupSize) % groupSize;        \
-    int ctr = 0;                       \
-    while(ctr < evalGroupIdxLen)       \
-    {                                  \
-        s                              \
-        lp = (lp + 1) % groupSize;     \
-        ctr++;                         \
-    }
-
 
 inline int bytesize(const int bitsize) {
     return (bitsize % 8) == 0 ? bitsize / 8 : (bitsize / 8)  + 1;

@@ -1,32 +1,43 @@
+## Installation Note:
+
+Our source code is built based on the [EZPC-LLAMA](https://github.com/mpc-msri/EzPC/tree/master/FSS) framework, and we reuse script codes like ArgMapping from it. Therefore, the complete installation of this framework is necessary, otherwise it is likely to fail to compile or execute.
+
 ## Files
 
-* `deps/` - This directory contains the external code from [ladnir/cryptoTools](https://github.com/ladnir/cryptoTools) on which our codebase depends.
-* `add.cpp` and `add.h` - This contains the implementation of addition of two masked integers. It is used to replace the `+` operator in EzPC.
-* `api.cpp` and `api.h` - This file contains the implementation of the Athos API using FSS. Every extern function called by Athos is implemented here. All the functions work in fixed bitwidth.
-* `api_varied.cpp` and `api_varied.h` - This file contains the implementation of the SeeDot mixed-bitwidth API using FSS. This means that all the extern functions that SeeDot dumps are implemented in this file. Some API endpoints also contain an implicit implementation of many FSS Gates in the paper.
-* `ArgMapping.h` - Argument parser for LLAMA binary.
-* `array.h` - Contains convenient functions and macros for array allocation and indexing
-* `comms.cpp` and`comms.h` - Contains helper functions for transfering data between dealer-evaluator (offline communication) and evaluator-evaluator (online communication). Contains wrappers for transferring different kinds of keys using fundamental transfer of `block`s and `GroupElement`s.
-* `config.h` - Contains the compile time configuration macros.
-* `conv.cpp` and `conv.h` - Contains the implementation of FSS gates for Convolution and Matmul.
-* `dcf.cpp` and `dcf.h` - Contains the implementation of FSS scheme for DCF from [BCG+21](https://eprint.iacr.org/2020/1392).
-* `fss.h` - Public header file for FSS.
-* `GroupElement.h` - Contains the definition of the GroupElement class - a wrapper over `uint64_t`. 
-* `input_prng.cpp` and `input_prng.h` - Contains the implementation of the input layers which uses a PRNG to compress the keysize required for input layers.
-* `keypack.h` - Contains structures of different FSS Keys.
-* `lib.cpp`, `lib.h` and `lib.ezpc` - Contains implementations of functions which can be written as wrappers over API endpoints. `lib.cpp` and `lib.h` are generated from the `lib.ezpc` file by running `fssc --bitlen 64 --l lib.ezpc`.
-* `mult.cpp` and `mult.h` - Contains the implementation of multiplication of two masked integers. It is used to replace the `*` operator in EzPC. It contains both uniform bitwidth (from BCG+21) and varying bitwidth (from LLAMA paper).
-* `pubdiv.cpp` and `pubdiv.h` - Contains the implementation of FSS gates for Public Division and ARS along with the FSS Gates for Signed Comparison and Interval Containment as the FSS Gate for Public Divison depends on these two gates.
-* `spline.cpp` and `spline.h` - Contains implementation of FSS gates for Spline Evaluation. This gate is used to implement FSS Gates for ReLU and math functions like Sigmoid, Tanh and Reciprocal-Squareroot.
-* `utils.cpp` and `utils.h` - Contains helper functions.
+Naming rules: Files staring with `2pc` implements dealer-less FSS or its related functions, otherwise, it is modifed from LLAMA framework. Refer to the [original LLAMA documentation](https://github.com/mpc-msri/EzPC/blob/master/FSS/README.md) for their original usage.
+
+* `deps/` - This directory contains the external code on which our codebase depends, including AES implementation, Millionaire protocol, Oblivious Transfer and other Utils. See respective files for the copyright information.
+* `2pc_api.cpp` and `2pc_api.h` - This file contains the implementations of FSS-based building blocks.
+* `2pc_cleartext.cpp` and `2pc_cleartext.h` - This file contains the implementations of trigonometric evaluations and case studies under the cleartext (not secret-sharing) values, only for used correctness verification.
+* `2pc_dcf.cpp` and `2pc_dcf.h` - This file contains the implementations of dealer-less distributed comparison function (DCF). Note that, the incremental-DPF (iDPF) based DCF, namely `iDCF` in the file, is incorrect and should not be used currently.
+* `2pc_idpf.cpp` and `2pc_idpf.h` - This file contains the implementations of dealer-less distributed point function (DPF) and incremental-DPF (iDPF).
+* `2pc_math.cpp` and `2pc_math.h` - This file contains the implementations of dealer-less FSS-based trigonometric function and related case studies.
+* `2pcwrapper.cpp` and `2pcwrapper.h` - This file contains the wrapper functions for the underlying MPC functionalities in our work.
+* `api.cpp` and `api.h` - We modified this file to with the reconstruct operation and count the overhead caused by reconstruct operation when it is invoked. 
+* `comms.cpp` and`comms.h` - We modified this file with COT (Correlated Oblivious Transfer) invocations and count the overhead caused by COT when it is invoked. 
+* `GroupElement.h` - We modified this file with local segment operation and constant multiplication for fixed-point representation.
+* `keypack.h` - We modified this file with various key pack classes.
+* `utils.cpp` and `utils.h` - We modified this file with LUT construction and other helper functions.
 
 ## Protocols
 
-We have implemented the following protocols from the [paper](https://eprint.iacr.org/2022/793.pdf) in the respective files:
+We have implemented the following protocols from the [paper](https://dx.doi.org/10.14722/ndss.2025.242233) in the respective files:
 
-1. Sign Extension (Figure 1): `internalExtend` function in `api_varied.cpp`
-2. Truncate-Reduce (Figure 2): `internalTruncateAndFix` function in `api_varied.cpp`
-3. Signed Multiplication (Figure 3): `new_mult_signed_gen` and `new_mult_signed_eval` from `mult.cpp`
-4. Unsigned Multiplication (Figure 4): `new_mult_unsigned_gen` and `new_mult_unsigned_eval` from `mult.cpp`
-5. Signed Division (Figure 5): `keyGenSignedPublicDiv`, `evalSignedPublicDiv_First` and `evalSignedPublicDiv_Second` from `pubdiv.cpp`
-6. Mixed Bitwidth Splines (Figure 6): `keygenSigmoid` and `evalSigmoid` (name is a bit misleading but same function is used for all math functions with different coefficients) from `spline.cpp`
+1. Constraint Comparison (Algorithm 1): `cmp_2bit_opt` in `2pcwrapper.cpp`.
+2. Dealer-less DPF (Algorithm 2): `keyGenDPF` and `evalDPF` in `2pc_dpf.cpp`. Overloaded functions with batched DPF evaluation are provided. Full domain evaluation is implemented via `evalAll`.
+3. Dealer-less DCF, Correlated CW Generation (Algorithm 3, 4): `keyGenNewDCF` and `evalNewDCF` in `2pc_dcf.cpp`, enabling batched evaluation in default (no overloaded function).
+4. DPF-based Equality Test (Algorithm 5): `keyGenDPF` and `evalDPF` in `2pc_dpf.cpp`, with the variable `masked = True`.
+5. DCF-based Comparison (Algorithm 6): `comparison_offline` and `comparison` in `2pc_api.cpp`. Overloaded functions with batched comparisons are provided.
+6. Truncate and Reduce (Algorithm 7): `truncate_and_reduce_offline` and `truncate_and_reduce` in `2pc_api.cpp`.
+7. Secure Containment (Algorithm 8): `containment_offline` and `containment` in `2pc_api.cpp`.
+8. Secure Digit Decomposition Protocol (Algorithm 9): `digdec_offline` and `digdec` in `2pc_api.cpp`.
+9. Public Lookup Table Protocol (Algorithm 10): `pub_lut_offline` and `pub_lut` in `2pc_api.cpp`.
+10. Private Lookup Table Protocol (Algorithm 11): `pri_lut_offline` and `pri_lut` in `2pc_api.cpp`.
+11. Secure Spline Polynomial Approximation Protocol (Algorithm 12): `spline_poly_approx_offline` and `spline_poly_approx` in `2pc_api.cpp`.
+12. Secure Sine Protocol (Algorithm 13): `sine_offline` and `sine` in `2pc_math.cpp`.
+13. Secure Cosine Protocol: `cosine_offline` and `cosine` in `2pc_math.cpp`.
+14. Secure Tangent Protocol (Algorithm 16): `tangent_offline` and `tangent` in `2pc_math.cpp`.
+15. Proximity Test and Biometric Authentication: `proximity(_offline)` and `biometric(_offline)` in `2pc_math.cpp`.
+
+For the detailed usage, please refer to the `2pc_test` folder.
+

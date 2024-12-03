@@ -1,6 +1,16 @@
-//
-// Created by  邢鹏志 on 2023/2/5.
-//
+/*
+ * Description: Refer to README.md
+ * Author: Pengzhi Xing
+ * Email: p.xing@std.uestc.edu.cn
+ * Last Modified: 2024-12-02
+ * License: Apache-2.0 License
+ * Copyright (c) 2024 Pengzhi Xing
+ * Usage:
+ * Example:
+ *
+ * Change Log:
+ * 2024-12-02 - Initial version of the authentication module
+ */
 #include "../../src/2pc_idpf.h"
 #include "../../src/group_element.h"
 #include "../../src/ArgMapping.h"
@@ -22,22 +32,21 @@ int num_threads = 1;
 int port = 32000;
 std::string address = "127.0.0.1";
 int num_argmax = 1000;
-uint8_t choice_bit = 0;
 bool verbose = 1;
 int length = 1;
 Peer* client = nullptr;
 Peer* server = nullptr;
 Dealer* dealer = nullptr;
 Peer* peer = nullptr;
+int function = 0;
 
 int main(int argc, char **argv){
     ArgMapping amap;
-    amap.arg("r", party, "Role of party: ALICE = 1; BOB = 2");
+    amap.arg("r", party, "Role of party: ALICE = 2; BOB = 3");
     amap.arg("p", port, "Port Number");
-    amap.arg("b", choice_bit, "Choice bit");
-    amap.arg("v", verbose, "Verbose");
     amap.arg("i", Bin, "bit length in");
     amap.arg("o", Bout, "bit length");
+    amap.arg("f", function, "Function choice: DPF = 0; DCF = 1; DPF-based Equality Test = 2; DCF-based comparison = 3");
     amap.parse(argc, argv);
 
     GroupElement x = GroupElement(2, Bin);
@@ -50,81 +59,92 @@ int main(int argc, char **argv){
         payload_list[i] = GroupElement(party - 2, Bout);
     }
 
+    DPFKeyPack DPF_key;
+    newDCFKeyPack DCF_key;
+    DPFKeyPack EQ_key;
+    ComparisonKeyPack CMP_key;
 
     auto start = std::chrono::high_resolution_clock::now();
+    auto mid = std::chrono::high_resolution_clock::now();
     auto end = std::chrono::high_resolution_clock::now();
-    auto dpf_duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    auto online_duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    auto offline_duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    auto total_duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
     uint64_t init_byte, rounds;
     uint64_t mid_byte, mid_rounds;
 
     if(party==CLIENT){
         cout << "Client execution. Payload.value = " << payload.value << endl;
-        //client = new Peer(address, port);
         server = new Peer(address, port);
         peer = server;
         init_byte = peer->bytesSent;
         rounds = peer->rounds;
-        start = std::chrono::high_resolution_clock::now();
-        ComparisonKeyPack key = comparison_offline(party, Bin, Bout, GroupElement(1, Bin), &payload, true);
-        //newDCFKeyPack key(keyGenNewDCF(party, Bin, Bout, GroupElement(1, Bin), payload));
-        //DPFKeyPack key(keyGenDPF(party, Bin, Bout, GroupElement(1, Bin), payload));
-        //iDCFKeyPack idcf_key(keyGeniDCF(party, Bin, Bout, GroupElement(1, Bin), &payload));
-        mid_byte = peer->bytesSent;
-        mid_rounds = peer->rounds;
-        std::cout << "============Online start========="<<std::endl;
-        comparison(party, res, &x, &key, 1, Bin);
-        //evalNewDCF(party, res, &x, &key, 1, Bin);
-        //evalDPF(party, res, x, key);
-        //evaliDCF(party, &idcf_res, x, idcf_key);
-        end = std::chrono::high_resolution_clock::now();
-        //dpf_duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-        //DPFKeyPack ikey(keyGeniDPF(party, Bin, Bout, GroupElement(2, Bin), payload_list));
-        //evaliDPF(party, ires, x, ikey);
-        //iDCFKeyPack idcf_key(keyGeniDCF(party, Bin, Bout, GroupElement(1, Bin), &payload));
-        //evaliDCF(party, &idcf_res, x, idcf_key);
-    }
-    else{
+    }else {
         cout << "Server execution, Payload.value = " << payload.value<< endl;
-        //server = new Peer(address, port);
         client = waitForPeer(port);
         peer = client;
         init_byte = peer->bytesSent;
         rounds = peer->rounds;
-        start = std::chrono::high_resolution_clock::now();
-        //newDCFKeyPack key(keyGenNewDCF(party, Bin, Bout, GroupElement(1, Bin), payload));
-        ComparisonKeyPack key(comparison_offline(party, Bin, Bout, GroupElement(1, Bin), &payload, true));
-        //DPFKeyPack key(keyGenDPF(party, Bin, Bout, GroupElement(2, Bin), payload));
-        //iDCFKeyPack idcf_key(keyGeniDCF(party, Bin, Bout, GroupElement(1, Bin), &payload));
-        mid_byte = peer->bytesSent;
-        mid_rounds = peer->rounds;
-        std::cout << "============Online start========="<<std::endl;
-        comparison(party, res, &x, &key, 1, Bin);
-        //evalDPF(party, res, x, key);
-        //evaliDCF(party, &idcf_res, x, idcf_key);
-        //evalNewDCF(party, res, &x, &key, 1, Bin);
-        end = std::chrono::high_resolution_clock::now();
-        //dpf_duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-        //DPFKeyPack ikey(keyGeniDPF(party, Bin, Bout, GroupElement(1, Bin), payload_list));
-        //evaliDPF(party, ires, x, ikey);
-        //iDCFKeyPack idcf_key(keyGeniDCF(party, Bin, Bout, GroupElement(1, Bin), &payload));
-        //evaliDCF(party, &idcf_res, x, idcf_key);
     }
-    std::cout << "Init (Bytes, Rounds) = " << init_byte << ", " << rounds << std::endl;
-    std::cout << "Offline (Bytes, Rounds) = " << (mid_byte - init_byte) << ", " << mid_rounds - rounds << std::endl;
-    std::cout << "Online (Bytes, Rounds) = " << (peer->bytesSent - mid_byte) << ", " << peer->rounds - mid_rounds << std::endl;
 
-    /*
-    auto final_end = std::chrono::high_resolution_clock::now();
-    auto final_duration = std::chrono::duration_cast<std::chrono::microseconds>(final_end - end).count();
-    std::cout << "(DPF) Party " << party << " :" << "Time = " << dpf_duration << std::endl;
-    std::cout << "(iDPF) Party " << party << " :" << "Time = " << final_duration << std::endl;
-    std::cout << "DPF Res:" << res->value % (1<<Bout) << std::endl;
-    std::cout << "iDPF Res:";
-    for (int i = 0; i < Bin; i++){
-        std::cout << " " << ires[i].value % (1<<Bout) << ",";
+    start = std::chrono::high_resolution_clock::now();
+
+    switch (function) {
+        case 0:{
+            DPF_key = keyGenDPF(party, Bin, Bout, GroupElement(1, Bin), payload, false);
+            break;
+        }
+        case 1:{
+            DCF_key = keyGenNewDCF(party, Bin, Bout, GroupElement(1, Bin), payload);
+            break;
+        }
+        case 2:{
+            EQ_key = keyGenDPF(party, Bin, Bout, GroupElement(1, Bin), payload);
+            break;
+        }
+        case 3:{
+            CMP_key = comparison_offline(party, Bin, Bout, GroupElement(1, Bin), &payload, true);
+            break;
+        }
+        default:{
+            std::cout << "[ERROR] No matching function!" << std::endl;
+        }
     }
-    std::cout << std::endl;
-    std::cout << "iDCF Res: " << idcf_res.value << std::endl;
-     */
+    mid_byte = peer->bytesSent;
+    mid_rounds = peer->rounds;
+    mid = std::chrono::high_resolution_clock::now();
+    std::cout << "============Online start========="<<std::endl;
+    switch (function) {
+        case 0:{
+            evalDPF(party, res, x, DPF_key, false);
+            break;
+        }
+        case 1:{
+            evalNewDCF(party, res, &x, &DCF_key, 1, Bin);
+            break;
+        }
+        case 2:{
+            evalDPF(party, res, x, EQ_key);
+            break;
+        }
+        case 3:{
+            comparison(party, res, &x, &CMP_key, 1, Bin);
+            break;
+        }
+        default:{
+            std::cout << "[ERROR] No matching function!" << std::endl;
+        }
+    }
+    end = std::chrono::high_resolution_clock::now();
+
+    online_duration = std::chrono::duration_cast<std::chrono::microseconds>(end - mid).count();
+    offline_duration = std::chrono::duration_cast<std::chrono::microseconds>(mid - start).count();
+    total_duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+
+    std::cout << "Init (Bytes, Rounds) = " << init_byte << ", " << rounds << std::endl;
+    std::cout << "Offline (Bytes, Rounds, Time (microsec)) = " << (mid_byte - init_byte) << ", " << mid_rounds - rounds << ", " << offline_duration << std::endl;
+    std::cout << "Online (Bytes, Rounds, Time (microsec)) = " << (peer->bytesSent - mid_byte) << ", " << peer->rounds - mid_rounds << ", " << online_duration << std::endl;
+    std::cout << "Total (Bytes, Rounds, Time (microsec)) = " << (peer->bytesSent - init_byte)  << ", " << peer->rounds - rounds << ", " << total_duration << std::endl;
+
     return 0;
 }

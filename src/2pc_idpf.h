@@ -1,6 +1,16 @@
-//
-// Created by  邢鹏志 on 2023/1/31.
-//
+/*
+ * Description: Refer to README.md
+ * Author: Pengzhi Xing
+ * Email: p.xing@std.uestc.edu.cn
+ * Last Modified: 2024-12-02
+ * License: Apache-2.0 License
+ * Copyright (c) 2024 Pengzhi Xing
+ * Usage:
+ * Example:
+ *
+ * Change Log:
+ * 2024-12-02 - Initial version of the authentication module
+ */
 #pragma once
 #include <array>
 #include <vector>
@@ -18,11 +28,6 @@
 #include "2pcwrapper.h"
 
 using namespace osuCrypto;
-
-
-// extern uint64_t aes_evals_count;
-
-
 
 inline u8 lsb(const block &b)
 {
