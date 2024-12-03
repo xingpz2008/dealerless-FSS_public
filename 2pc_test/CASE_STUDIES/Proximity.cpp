@@ -43,7 +43,7 @@ int bitsize = 8;
 int scale = 5;
 float left_pt = 0;
 float right_pt = 0.5;
-bool using_lut = false;
+int using_lut = 0;
 
 
 // Note: CASE_STUDIES Test can be formulated as:
@@ -53,8 +53,10 @@ bool using_lut = false;
 
 int main(int argc, char **argv){
     ArgMapping amap;
-    amap.arg("r", party, "Role of party: ALICE = 1; BOB = 2");
-    amap.arg("p", port, "Port Number");
+    amap.arg("r", party, "Role of party: ALICE = 2; BOB = 3");
+    amap.arg("i", bitsize, "Bit size");
+    amap.arg("s", scale, "Scale");
+    amap.arg("l", using_lut, "Role of party: ALICE = 2; BOB = 3");
     amap.parse(argc, argv);
 
     srand((unsigned)time(NULL));
@@ -110,7 +112,7 @@ int main(int argc, char **argv){
     }
 
     start = std::chrono::high_resolution_clock::now();
-    ProximityKeyPack key = proximity_offline(party, bitsize, scale, using_lut, (scale - 1) / 2,
+    ProximityKeyPack key = proximity_offline(party, bitsize, scale, (bool)using_lut, (scale - 1) / 2,
                                              16, 2);
 
     mid_byte = peer->bytesSent - init_byte;

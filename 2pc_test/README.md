@@ -73,3 +73,19 @@ Argument:
 `l` stands for if Lookup Table implementation is used. 0 = Using Spline Polynomial Approximation. 
 Note that, we only implement 2-deg-16-segment approximation currently. 
 To test other settings, you have to construct the coefficient list first via `create_approx_spline` function from `src/utils.cpp`, which is a little bit complex.
+
+### Case Studies Test
+```bash
+cd CASE_STUDIES
+./PROX_TEST r=2
+```
+
+There are three test scripts in the folder.
+
+`ULP.cpp` is used to check the accuracy of out trigonometric framework.
+
+`Proximity.cpp` is used to test proximity testing function.
+
+`Biometric.cpp` is used to test biometric authentication function.
+
+To compile different test script, simply change `add_executable(PROX_TEST {TARGET CPP FILE NAME})` in `CASE_STUDIES/CMakeLists.txt`

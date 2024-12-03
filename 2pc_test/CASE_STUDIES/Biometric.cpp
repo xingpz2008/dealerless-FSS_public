@@ -56,7 +56,7 @@ const bool using_lut = false;
 
 int main(int argc, char **argv){
     ArgMapping amap;
-    amap.arg("r", party, "Role of party: ALICE = 1; BOB = 2");
+    amap.arg("r", party, "Role of party: ALICE = 2; BOB = 3");
     amap.parse(argc, argv);
 
     srand((unsigned)time(NULL));
