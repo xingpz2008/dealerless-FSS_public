@@ -4,7 +4,7 @@ Our source code is built based on the [EZPC-LLAMA](https://github.com/mpc-msri/E
 
 ## Files
 
-Naming rules: Files staring with `2pc` implements dealer-less FSS or its related functions, otherwise, it is modifed from LLAMA framework. Refer to the [original LLAMA documentation](https://github.com/mpc-msri/EzPC/blob/master/FSS/README.md) for their original usage.
+Naming rules: Files staring with `2pc` implements dealer-less FSS or its related functions, otherwise, it is modifed from LLAMA framework. Refer to [LLAMA documentation](https://github.com/mpc-msri/EzPC/blob/master/FSS/README.md) for their original usage.
 
 * `deps/` - This directory contains the external code on which our codebase depends, including AES implementation, Millionaire protocol, Oblivious Transfer and other Utils. See respective files for the copyright information.
 * `2pc_api.cpp` and `2pc_api.h` - This file contains the implementations of FSS-based building blocks.
@@ -13,7 +13,7 @@ Naming rules: Files staring with `2pc` implements dealer-less FSS or its related
 * `2pc_idpf.cpp` and `2pc_idpf.h` - This file contains the implementations of dealer-less distributed point function (DPF) and incremental-DPF (iDPF).
 * `2pc_math.cpp` and `2pc_math.h` - This file contains the implementations of dealer-less FSS-based trigonometric function and related case studies.
 * `2pcwrapper.cpp` and `2pcwrapper.h` - This file contains the wrapper functions for the underlying MPC functionalities in our work.
-* `api.cpp` and `api.h` - We modified this file to with the reconstruct operation and count the overhead caused by reconstruct operation when it is invoked. 
+* `api.cpp` and `api.h` - We modified this file with the reconstruct operation and count the overhead caused by reconstruct operation when it is invoked. 
 * `comms.cpp` and`comms.h` - We modified this file with COT (Correlated Oblivious Transfer) invocations and count the overhead caused by COT when it is invoked. 
 * `GroupElement.h` - We modified this file with local segment operation and constant multiplication for fixed-point representation.
 * `keypack.h` - We modified this file with various key pack classes.

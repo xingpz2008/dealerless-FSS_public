@@ -13,7 +13,7 @@ This repository consists of the following parts:
 
 ## Installation
 ***NOTE: Our implementation is built based on [EzPC](https://github.com/mpc-msri/EzPC) and a complete compilation process of EzPC is required.
-For any issues occurred during step 1 to 4, please refer to [EzPC troubleshooting](https://github.com/mpc-msri/EzPC/issues).
+For any issues occurred during step 1 to 4, please refer to [EzPC troubleshooting](https://github.com/mpc-msri/EzPC/issues).***
 
 1. Clone EzPC repository (At this step, you do not have to clone our repo. If you have already done so, it is recommended to execute ```cd ..```).
 
