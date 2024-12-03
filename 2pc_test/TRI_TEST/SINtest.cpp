@@ -36,37 +36,21 @@ Peer* server = nullptr;
 Dealer* dealer = nullptr;
 Peer* peer = nullptr;
 extern int32_t numRounds;
-
-/*
-MUX wrapper:
-
-void multiplexer(int party_id, uint8_t *sel, block *dataA, block *output,
-                 int32_t size, Peer* player);
-
-void multiplexer(int party_id, uint8_t *sel, uint64_t *dataA, uint64_t *output,
-                 int32_t size, int32_t bw_x, int32_t bw_y, Peer* player);
-
-void multiplexer(int party_id, uint8_t *sel, GroupElement *dataA, GroupElement *output,
-                 int32_t size, Peer* player);
-
-void multiplexer2(int party_id, uint8_t *sel, uint64_t *dataA, uint64_t *dataB, uint64_t *output,
-                  int32_t size, int32_t bw_x, int32_t bw_y, Peer* player);
-
-void multiplexer2(int party_id, uint8_t *control_bit, osuCrypto::block* dataA, osuCrypto::block* dataB,
-                          osuCrypto::block* output, int32_t size, Peer* player);
-
-void multiplexer2(int party_id, uint8_t *control_bit, GroupElement* dataA, GroupElement* dataB,
-                          GroupElement* output, int32_t size, Peer* player);
-
-*/
+int function = 0;
+int Bin = 8;
+int Bout = 8;
+int scale = 5;
+int using_lut = 1;
 
 int main(int argc, char **argv){
     ArgMapping amap;
-    amap.arg("r", party, "Role of party: ALICE = 1; BOB = 2");
+    amap.arg("r", party, "Role of party: ALICE = 2; BOB = 3");
     amap.arg("p", port, "Port Number");
-    amap.arg("b", choice_bit, "Choice bit");
     amap.arg("v", verbose, "Verbose");
-    amap.arg("l", length, "Arr length");
+    amap.arg("f", function, "Function");
+    amap.arg("i", Bin, "Input Bit length");
+    amap.arg("o", Bout, "Output Bit length");
+    amap.arg("l", using_lut, "Using LUT");
     amap.parse(argc, argv);
     int mul_size = 1+1;
 
@@ -77,53 +61,83 @@ int main(int argc, char **argv){
         input[i] = GroupElement(3, 2);
         output[i] = GroupElement(3, 2);
     }
-    SineKeyPack key;
+    SineKeyPack sin_key;
+    CosineKeyPack cos_key;
+    TangentKeyPack tan_key;
+
+    uint64_t init;
+    uint64_t init_rounds;
+
+    auto start = std::chrono::high_resolution_clock::now();
+    auto mid = std::chrono::high_resolution_clock::now();
+    auto end = std::chrono::high_resolution_clock::now();
+    auto online_duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    auto offline_duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    auto total_duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 
     if(party==CLIENT){
         cout << "Client execution." << endl;
         server = new Peer(address, port);
         peer = server;
-        uint64_t init = peer->bytesSent;
-        uint64_t init_rounds = peer->rounds;
-        // key = tangent_offline(party, 16, 16, 9, false, 16, 2);
-        key = sine_offline(party, 8, 8, 5, true, 3, 16, 2);
-        // int party_id, GroupElement* input, GroupElement* output, bool hold_arithmetic, int size, Peer* player
-        // peer->send_cot(input, output, mul_size, true);
-        // cross_term_gen(party, input, output, true, mul_size, peer);
-        //modular_offline(party, GroupElement(2,2), 2);
-        /*
-        for (int i = 0; i < 20; i++){
-            peer->send_cot(input, output, mul_size, false);
-        }
-         */
-        uint64_t overhead[3] = {0,0,0};
-        overhead[0] = peer->bytesSent - init;
-        overhead[1] = peer->bytesReceived;
-        overhead[2] = peer->rounds - init_rounds;
-        //tangent(party, GroupElement(1, 16), key);
-        sine(party, GroupElement(1, 8), key);
-        std::cout << "Offline Overhead: 1. Send = " << overhead[0] << ", 2. Received = " << overhead[1] << ", 3. Rounds = " << overhead[2] << std::endl;
-        std::cout << "Online Overhead: 1. Send = " << peer->bytesSent - overhead[0] << ", 2. Received = " << peer->bytesReceived - overhead[1]<< ", 3. Rounds = " << peer->rounds - overhead[2]<< std::endl;
-    }
-    else{
+    }else{
         cout << "Server execution." << endl;
         client = waitForPeer(port);
         peer = client;
-        // key = tangent_offline(party, 16, 16, 9, false, 16, 2);
-        key = sine_offline(party, 8, 8, 5, true, 3, 16, 2);
-        //peer->recv_cot(output, mul_size, sel, true);
-        //cross_term_gen(party, input, output, false, mul_size, peer);
-        //modular_offline(party, GroupElement(2,2), 2);
-        /*
-        for (int i = 0; i < 20; i++){
-            peer->recv_cot(output, mul_size, sel, false);
-        }
-         */
-        std::cout << "Overhead: 1. Send = " << peer->bytesSent << ", 2. Received = " << peer->bytesReceived << ", 3. Rounds = " << numRounds << std::endl;
-        sine(party, GroupElement(1, 8), key);
-        // tangent(party, GroupElement(1, 16), key);
-        std::cout << "Overhead: 1. Send = " << peer->bytesSent << ", 2. Received = " << peer->bytesReceived << ", 3. Rounds = " << numRounds << std::endl;
     }
+    uint64_t init_byte, rounds;
+    uint64_t mid_byte, mid_rounds;
+    init_byte = peer->bytesSent;
+    rounds = peer->rounds;
+
+    start = std::chrono::high_resolution_clock::now();
+    switch (function) {
+        case 0:{
+            sin_key = sine_offline(party, Bin, Bout, scale, (bool)using_lut, 3, 16, 2);
+            break;
+        }
+        case 1: {
+            cos_key = cosine_offline(party, Bin, Bout, scale, (bool)using_lut, 3, 16, 2);
+            break;
+        }
+        case 2: {
+            tan_key = tangent_offline(party, Bin, Bout, scale, (bool)using_lut, 16, 2);
+            break;
+        }
+        default: {
+            std::cout << "[ERROR] No matching function!" << std::endl;
+        }
+    }
+    mid = std::chrono::high_resolution_clock::now();
+    mid_byte = peer->bytesSent;
+    mid_rounds = peer->rounds;
+    switch (function) {
+        case 0:{
+            sine(party, GroupElement(1, Bin), sin_key);
+            break;
+        }
+        case 1: {
+            cosine(party, GroupElement(1, Bin), cos_key);
+            break;
+        }
+        case 2: {
+            tangent(party, GroupElement(1, Bin), tan_key);
+            break;
+        }
+        default: {
+            std::cout << "[ERROR] No matching function!" << std::endl;
+        }
+    }
+    end = std::chrono::high_resolution_clock::now();
+
+    online_duration = std::chrono::duration_cast<std::chrono::microseconds>(end - mid).count();
+    offline_duration = std::chrono::duration_cast<std::chrono::microseconds>(mid - start).count();
+    total_duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+
+    std::cout << "Init (Bytes, Rounds) = " << init_byte << ", " << rounds << std::endl;
+    std::cout << "Offline (Bytes, Rounds, Time (microsec)) = " << (mid_byte - init_byte) << ", " << mid_rounds - rounds << ", " << offline_duration << std::endl;
+    std::cout << "Online (Bytes, Rounds, Time (microsec)) = " << (peer->bytesSent - mid_byte) << ", " << peer->rounds - mid_rounds << ", " << online_duration << std::endl;
+    std::cout << "Total (Bytes, Rounds, Time (microsec)) = " << (peer->bytesSent - init_byte)  << ", " << peer->rounds - rounds << ", " << total_duration << std::endl;
+
     delete[] input;
     delete[] output;
 }

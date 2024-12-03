@@ -1,6 +1,16 @@
-//
-// Created by root on 3/17/23.
-//
+/*
+ * Description: Refer to README.md
+ * Author: Pengzhi Xing
+ * Email: p.xing@std.uestc.edu.cn
+ * Last Modified: 2024-12-02
+ * License: Apache-2.0 License
+ * Copyright (c) 2024 Pengzhi Xing
+ * Usage:
+ * Example:
+ *
+ * Change Log:
+ * 2024-12-02 - Initial version of the authentication module
+ */
 #include "../../src/group_element.h"
 #include "../../src/2pc_cleartext.h"
 #include "../../src/2pc_math.h"
@@ -35,28 +45,6 @@ float left_pt = 0;
 float right_pt = 0.5;
 bool using_lut = false;
 
-/*
-MUX wrapper:
-
-void multiplexer(int party_id, uint8_t *sel, block *dataA, block *output,
-                 int32_t size, Peer* player);
-
-void multiplexer(int party_id, uint8_t *sel, uint64_t *dataA, uint64_t *output,
-                 int32_t size, int32_t bw_x, int32_t bw_y, Peer* player);
-
-void multiplexer(int party_id, uint8_t *sel, GroupElement *dataA, GroupElement *output,
-                 int32_t size, Peer* player);
-
-void multiplexer2(int party_id, uint8_t *sel, uint64_t *dataA, uint64_t *dataB, uint64_t *output,
-                  int32_t size, int32_t bw_x, int32_t bw_y, Peer* player);
-
-void multiplexer2(int party_id, uint8_t *control_bit, osuCrypto::block* dataA, osuCrypto::block* dataB,
-                          osuCrypto::block* output, int32_t size, Peer* player);
-
-void multiplexer2(int party_id, uint8_t *control_bit, GroupElement* dataA, GroupElement* dataB,
-                          GroupElement* output, int32_t size, Peer* player);
-
-*/
 
 // Note: CASE_STUDIES Test can be formulated as:
 // delta = sin^2 pi [(xA-xB)/2] + cos pi xA * cos pi xB * sin^2 pi [(yA-yB)/2]

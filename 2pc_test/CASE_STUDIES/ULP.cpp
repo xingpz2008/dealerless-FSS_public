@@ -1,6 +1,16 @@
-//
-// Created by root on 3/17/23.
-//
+/*
+ * Description: Refer to README.md
+ * Author: Pengzhi Xing
+ * Email: p.xing@std.uestc.edu.cn
+ * Last Modified: 2024-12-02
+ * License: Apache-2.0 License
+ * Copyright (c) 2024 Pengzhi Xing
+ * Usage:
+ * Example:
+ *
+ * Change Log:
+ * 2024-12-02 - Initial version of the authentication module
+ */
 #include "../../src/group_element.h"
 #include "../../src/2pc_cleartext.h"
 #include <cmath>
@@ -31,28 +41,6 @@ float left_pt = 0;
 float right_pt = 0.5;
 bool using_lut = false;
 
-/*
-MUX wrapper:
-
-void multiplexer(int party_id, uint8_t *sel, block *dataA, block *output,
-                 int32_t size, Peer* player);
-
-void multiplexer(int party_id, uint8_t *sel, uint64_t *dataA, uint64_t *output,
-                 int32_t size, int32_t bw_x, int32_t bw_y, Peer* player);
-
-void multiplexer(int party_id, uint8_t *sel, GroupElement *dataA, GroupElement *output,
-                 int32_t size, Peer* player);
-
-void multiplexer2(int party_id, uint8_t *sel, uint64_t *dataA, uint64_t *dataB, uint64_t *output,
-                  int32_t size, int32_t bw_x, int32_t bw_y, Peer* player);
-
-void multiplexer2(int party_id, uint8_t *control_bit, osuCrypto::block* dataA, osuCrypto::block* dataB,
-                          osuCrypto::block* output, int32_t size, Peer* player);
-
-void multiplexer2(int party_id, uint8_t *control_bit, GroupElement* dataA, GroupElement* dataB,
-                          GroupElement* output, int32_t size, Peer* player);
-
-*/
 
 int main(int argc, char **argv){
     float resolution = (float)1 / (1 << scale);
@@ -64,9 +52,6 @@ int main(int argc, char **argv){
     int delta_ulp = 0;
     for (int i = 0; i < test_num; i++){
         GroupElement input(value + (resolution) * i, bitsize, scale);
-        if (i == 18){
-            int sss = 9;
-        }
         GroupElement output = cleartext_cosine(input, scale, using_lut);
         GroupElement lib_output = GroupElement(cos(M_PI * (value + (resolution) * i)), bitsize, scale);
         delta_ulp = abs((int)output.value - (int)lib_output.value);
@@ -79,6 +64,4 @@ int main(int argc, char **argv){
 
     std::cout << "Accumulated ULP error = " << ulp << " within " << test_num << " testcases, avg_ULP = " << (float)ulp / test_num << std::endl;
 
-    // std::cout << "Value = " << output.value << " With bit size " << output.bitsize << std::endl;
-    // std::cout << "Lib value = " << GroupElement(sin(M_PI * value), 16, 9).value << std::endl;
 }

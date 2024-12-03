@@ -68,13 +68,13 @@ int APPROX_SEG = 16;
 
 int main(int argc, char **argv){
     ArgMapping amap;
-    amap.arg("r", party, "Role of party: ALICE = 1; BOB = 2");
+    amap.arg("r", party, "Role of party: ALICE = 2; BOB = 3");
     amap.arg("p", port, "Port Number");
-    amap.arg("b", choice_bit, "Choice bit");
     amap.arg("v", verbose, "Verbose");
     amap.arg("i", Bin, "bit length in");
     amap.arg("o", Bout, "bit length");
     amap.arg("f", function, "function");
+    amap.arg("s", scale, "Scale");
     amap.parse(argc, argv);
 
     GroupElement x = GroupElement(2, Bin);
@@ -105,7 +105,6 @@ int main(int argc, char **argv){
     }
     else{
         cout << "Server execution, Test function = " << function<< endl;
-        //server = new Peer(address, port);
         client = waitForPeer(port);
         peer = client;
         init_byte = peer->bytesSent;
@@ -206,10 +205,6 @@ int main(int argc, char **argv){
             break;
         }
     }
-    //comparison(party, res, &x, &key, 1, Bin);
-    //evalNewDCF(party, res, &x, &key, 1, Bin);
-    //evalDPF(party, res, x, key);
-    //evaliDCF(party, &idcf_res, x, idcf_key);
     end = std::chrono::high_resolution_clock::now();
 
     std::cout << "Init (Bytes, Rounds) = " << init_byte << ", " << rounds << std::endl;
