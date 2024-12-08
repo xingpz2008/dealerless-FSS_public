@@ -57,7 +57,7 @@ For Truncate and Reduce, adjust the `TR_S` to change the amount of truncated bit
 
 For Containment, change `CTN_SIZE` to any knots number and `CTN_KNOTS` to define custom knot points.
 
-For Public / Private LUT, the size of table entries is determined by input bit length `f`.
+For Public / Private LUT, the size of table entries is determined by input bit length `i`.
 
 For Spline Polynomial Approximation, variable `APPROX_DEG` determines approximation degree and `APPROX_SEG` determines spline numbers. 
 
