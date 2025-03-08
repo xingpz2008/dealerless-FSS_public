@@ -1,5 +1,5 @@
 # Distributed Function Secret Sharing and Applications
-Source code and the implementation of the NDSS'25 accepted paper - [_Distributed Function Secret Sharing and Applications_](https://dx.doi.org/10.14722/ndss.2025.242233).
+Source code and the implementation of the NDSS'25 accepted paper - [_Distributed Function Secret Sharing and Applications_](https://www.ndss-symposium.org/ndss-paper/distributed-function-secret-sharing-and-applications/).
 
 ## Introduction
 We introduce distributed key generation schemes for FSS-based distributed point function and distributed comparison function,
