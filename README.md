@@ -79,3 +79,21 @@ As the alternative, you may directly invoke our FSS protocol as the wrapper func
 
 ## Disclaimer
 This repository is a proof-of-concept prototype.
+
+## Cite Us
+```
+@inproceedings{dealerfss25xing,
+  author       = {Pengzhi Xing and
+                  Hongwei Li and
+                  Meng Hao and
+                  Hanxiao Chen and
+                  Jia Hu and
+                  Dongxiao Liu},
+  title        = {Distributed Function Secret Sharing and Applications},
+  booktitle    = {32nd Annual Network and Distributed System Security Symposium, {NDSS}
+                  2025, San Diego, California, USA, February 24-28, 2025},
+  publisher    = {The Internet Society},
+  year         = {2025},
+  url          = {https://www.ndss-symposium.org/ndss-paper/distributed-function-secret-sharing-and-applications/}
+}
+```
