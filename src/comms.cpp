@@ -69,6 +69,8 @@ Peer::Peer(std::string ip, int port) {
     }
     iopack_ = new sci::IOPack(party-1, port);
     otpack = new sci::OTPack(iopack_, party-1);
+    block_ot = new sci::IKNP<sci::NetIO>(iopack_->io);
+    block_ot_reversed = new sci::IKNP<sci::NetIO>(iopack_->io_rev);
     if (MillInstance == NULL){
         // Need to reconfigure bitlen when calling
         MillInstance = new MillionaireProtocol(party - 1, iopack_, otpack);
@@ -715,20 +717,22 @@ void Peer::recv_cot(GroupElement* recv_arr, int size, uint8_t* sel, bool using_a
     return;
 }
 
-void Peer::send_cot(osuCrypto::block input, osuCrypto::block* output, int size){
-    uint64_t pre_comm =otpack->iknp->io->counter;
-    uint64_t pre_rounds = otpack->iknp->io->num_rounds;
-    otpack->iknp->send_cot(output, input, size);
-    rounds += (otpack->iknp->io->num_rounds - pre_rounds);
-    bytesSent += (otpack->iknp->io->counter - pre_comm);
+void Peer::send_cot(osuCrypto::block input, osuCrypto::block* output, int size, bool using_aux_iknp){
+    auto* ot = using_aux_iknp ? block_ot_reversed : block_ot;
+    uint64_t pre_comm = ot->io->counter;
+    uint64_t pre_rounds = ot->io->num_rounds;
+    ot->send_cot(output, input, size);
+    rounds += (ot->io->num_rounds - pre_rounds);
+    bytesSent += (ot->io->counter - pre_comm);
 }
 
-void Peer::recv_cot(osuCrypto::block* recv_arr, int size, bool* sel){
-    uint64_t pre_comm = otpack->iknp->io->counter;
-    uint64_t pre_rounds = otpack->iknp->io->num_rounds;
-    otpack->iknp->recv_cot(recv_arr, sel, size);
-    rounds += (otpack->iknp->io->num_rounds - pre_rounds);
-    bytesSent += (otpack->iknp->io->counter - pre_comm);
+void Peer::recv_cot(osuCrypto::block* recv_arr, int size, bool* sel, bool using_aux_iknp){
+    auto* ot = using_aux_iknp ? block_ot_reversed : block_ot;
+    uint64_t pre_comm = ot->io->counter;
+    uint64_t pre_rounds = ot->io->num_rounds;
+    ot->recv_cot(recv_arr, sel, size);
+    rounds += (ot->io->num_rounds - pre_rounds);
+    bytesSent += (ot->io->counter - pre_comm);
 }
 
 void Peer::mill(uint8_t *res, uint64_t *data, int num_cmps, int bitlength,

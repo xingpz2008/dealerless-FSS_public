@@ -1,3 +1,5 @@
+#pragma once
+
 /*
  * Description: Refer to README.md
  * Author: Pengzhi Xing
@@ -24,6 +26,14 @@ void comparison(int party_id, GroupElement* res, GroupElement idx, ComparisonKey
 void comparison(int party_id, GroupElement* res, GroupElement* idx, ComparisonKeyPack* KeyList,
                 int size, int max_bitsize);
 
+[[deprecated("Use ring_extend with an offline ComparisonKeyPack; zero_extend performs direct online MILL/B2A.")]]
+GroupElement zero_extend(int party_id, GroupElement input, int output_bits);
+
+ComparisonKeyPack ring_extend_offline(int party_id, int input_bits, int output_bits);
+
+GroupElement ring_extend(int party_id, GroupElement input, int output_bits,
+                         ComparisonKeyPack key);
+
 ModularKeyPack modular_offline(int party_id, GroupElement N, int Bout);
 
 GroupElement modular(int party_id, GroupElement input, int N, ModularKeyPack key);
@@ -33,6 +43,8 @@ TRKeyPack truncate_and_reduce_offline(int party_id, int l, int s);
 GroupElement truncate_and_reduce(int party_id, GroupElement input, int s, TRKeyPack key);
 
 ContainmentKeyPack containment_offline(int party_id, int Bout, GroupElement* knots_list, int knots_size);
+
+ContainmentKeyPack containment_offline_public(int party_id, int Bout, GroupElement* knots_list, int knots_size);
 
 void containment(int party_id, GroupElement input, GroupElement* output, int knots_size, ContainmentKeyPack key);
 
@@ -50,6 +62,16 @@ PrivateLutKey pri_lut_offline(int party_id, int idx_bitlen, int lut_bitlen, Grou
 GroupElement pri_lut(int party_id, GroupElement idx, PrivateLutKey key);
 
 SplinePolyApproxKeyPack spline_poly_approx_offline(int party_id, int Bin, int Bout,
-                                                   GroupElement* publicCoefficientList, int degree, int segNum);
+                                                   GroupElement* publicCoefficientList, int degree,
+                                                   int segNum, int fixed_scale = 0);
 
 GroupElement spline_poly_approx(int party_id, GroupElement input, SplinePolyApproxKeyPack key);
+
+[[deprecated("Legacy performance baseline only: fixed-point masked Approx is not correctness-safe.")]]
+SplinePolyApproxKeyPack spline_poly_approx_offline_legacy_no_online_beaver(
+    int party_id, int Bin, int Bout, GroupElement* publicCoefficientList,
+    int degree, int segNum, int fixed_scale = 0);
+
+[[deprecated("Legacy performance baseline only: fixed-point masked Approx is not correctness-safe.")]]
+GroupElement spline_poly_approx_legacy_no_online_beaver(
+    int party_id, GroupElement input, SplinePolyApproxKeyPack key);

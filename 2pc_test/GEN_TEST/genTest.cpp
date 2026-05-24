@@ -11,11 +11,11 @@
  * Change Log:
  * 2024-12-02 - Initial version of the authentication module
  */
-#include "../../src/2pc_idpf.h"
-#include "../../src/group_element.h"
-#include "../../src/ArgMapping.h"
-#include "../../src/2pc_dcf.h"
-#include "../../src/2pc_api.h"
+#include "2pc_idpf.h"
+#include "group_element.h"
+#include "ArgMapping.h"
+#include "2pc_dcf.h"
+#include "2pc_api.h"
 #include<iostream>
 
 int party_instance = 0;
@@ -38,7 +38,7 @@ Peer* client = nullptr;
 Peer* server = nullptr;
 Dealer* dealer = nullptr;
 Peer* peer = nullptr;
-int function = 0;
+int function_choice = 0;
 
 int main(int argc, char **argv){
     ArgMapping amap;
@@ -46,7 +46,7 @@ int main(int argc, char **argv){
     amap.arg("p", port, "Port Number");
     amap.arg("i", Bin, "bit length in");
     amap.arg("o", Bout, "bit length");
-    amap.arg("f", function, "Function choice: DPF = 0; DCF = 1; DPF-based Equality Test = 2; DCF-based comparison = 3");
+    amap.arg("f", function_choice, "Function choice: DPF = 0; DCF = 1; DPF-based Equality Test = 2; DCF-based comparison = 3");
     amap.parse(argc, argv);
 
     GroupElement x = GroupElement(2, Bin);
@@ -89,7 +89,7 @@ int main(int argc, char **argv){
 
     start = std::chrono::high_resolution_clock::now();
 
-    switch (function) {
+    switch (function_choice) {
         case 0:{
             DPF_key = keyGenDPF(party, Bin, Bout, GroupElement(1, Bin), payload, false);
             break;
@@ -114,7 +114,7 @@ int main(int argc, char **argv){
     mid_rounds = peer->rounds;
     mid = std::chrono::high_resolution_clock::now();
     std::cout << "============Online start========="<<std::endl;
-    switch (function) {
+    switch (function_choice) {
         case 0:{
             evalDPF(party, res, x, DPF_key, false);
             break;

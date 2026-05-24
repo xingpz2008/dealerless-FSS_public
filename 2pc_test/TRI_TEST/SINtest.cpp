@@ -11,12 +11,12 @@
  * Change Log:
  * 2024-12-02 - Initial version of the authentication module
  */
-#include "../../src/2pc_math.h"
-#include "../../src/deps/utils/ArgMapping/ArgMapping.h"
-#include "../../src/deps/cryptoTools/cryptoTools/Common/Defines.h"
-#include "../../src/2pcwrapper.h"
-#include "../../src/2pc_api.h"
-#include "../../src/comms.h"
+#include "2pc_math.h"
+#include "ArgMapping.h"
+#include <cryptoTools/Common/Defines.h>
+#include "2pcwrapper.h"
+#include "2pc_api.h"
+#include "comms.h"
 
 using namespace sci;
 using namespace std;
@@ -36,7 +36,7 @@ Peer* server = nullptr;
 Dealer* dealer = nullptr;
 Peer* peer = nullptr;
 extern int32_t numRounds;
-int function = 0;
+int function_choice = 0;
 int Bin = 8;
 int Bout = 8;
 int scale = 5;
@@ -47,7 +47,7 @@ int main(int argc, char **argv){
     amap.arg("r", party, "Role of party: ALICE = 2; BOB = 3");
     amap.arg("p", port, "Port Number");
     amap.arg("v", verbose, "Verbose");
-    amap.arg("f", function, "Function");
+    amap.arg("f", function_choice, "Function");
     amap.arg("i", Bin, "Input Bit length");
     amap.arg("o", Bout, "Output Bit length");
     amap.arg("l", using_lut, "Using LUT");
@@ -90,7 +90,7 @@ int main(int argc, char **argv){
     rounds = peer->rounds;
 
     start = std::chrono::high_resolution_clock::now();
-    switch (function) {
+    switch (function_choice) {
         case 0:{
             sin_key = sine_offline(party, Bin, Bout, scale, (bool)using_lut, 3, 16, 2);
             break;
@@ -110,7 +110,7 @@ int main(int argc, char **argv){
     mid = std::chrono::high_resolution_clock::now();
     mid_byte = peer->bytesSent;
     mid_rounds = peer->rounds;
-    switch (function) {
+    switch (function_choice) {
         case 0:{
             sine(party, GroupElement(1, Bin), sin_key);
             break;

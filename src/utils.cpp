@@ -489,6 +489,18 @@ int64_t getSignedValue(GroupElement x) {
     return val;
 }
 
+int fixed_point_approx_eval_bits(int output_bits, int scale) {
+    int eval_bits = output_bits + scale + 3;
+    const int max_product_safe_bits = 63;
+    if (eval_bits + scale > max_product_safe_bits) {
+        eval_bits = max_product_safe_bits - scale;
+    }
+    if (eval_bits < output_bits) {
+        eval_bits = output_bits;
+    }
+    return eval_bits;
+}
+
 void matmul_eval_helper(int dim1, int dim2, int dim3, GroupElement *A,
                             GroupElement *B, GroupElement *C, GroupElement *ka, GroupElement *kb, GroupElement *kc) {
     Eigen::Matrix<uint64_t, Eigen::Dynamic, Eigen::Dynamic> eigen_A(dim1, dim2);
@@ -548,7 +560,7 @@ void create_approx_spline(int uuid, int bitsize, int scale, GroupElement* coeffi
     int seg = uuid % 100;
     int list_size = (1 + deg) * seg;
     switch (uuid) {
-        case 0216:{
+        case 216:{
             // 0216 = 2 deg poly-approx to sine with 16 segs
             // list size = 3 * 16 = 48
             float list[] = {-2.4207849687076878e-1,-7.2390414238067667e-1,-1.1987581953565418,-1.6620675517525636,-2.1093702892801631,-2.5363586381721683,-2.9389204673831886,-3.3131788867008045,-3.6555295833987529,-3.9626755339118653,-4.2316587563840384,-4.45988879875165,-4.6451676897725758,-4.7857111218260835,-4.8801657387902724,-4.9276246922600206,

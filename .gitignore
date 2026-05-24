@@ -1,5 +1,6 @@
 /test.out
 /test.cpp
+.DS_Store
 client.dat
 server.dat
 *.out

@@ -28,14 +28,14 @@ SOFTWARE.
 #include "group_element.h"
 #include "keypack.h"
 #include "array.h"
-#include "deps/OT/emp-ot.h"
-#include "deps/OT/ot_pack.h"
-#include "deps/cryptoTools/cryptoTools/Common/Defines.h"
-#include "deps/Millionaire/bit-triple-generator.h"
-#include "deps/Millionaire/millionaire.h"
+#include "OT/emp-ot.h"
+#include "OT/ot_pack.h"
+#include <cryptoTools/Common/Defines.h>
+#include "Millionaire/bit-triple-generator.h"
+#include "Millionaire/millionaire.h"
 
-#include "deps/OT/split-iknp.h"
-#include "deps/OT/iknp.h"
+#include "OT/split-iknp.h"
+#include "OT/iknp.h"
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -65,6 +65,8 @@ public:
     uint64_t rounds = 0;
     sci::IOPack *iopack_;
     sci::OTPack *otpack;
+    sci::IKNP<sci::NetIO> *block_ot;
+    sci::IKNP<sci::NetIO> *block_ot_reversed;
     MillionaireProtocol *MillInstance = NULL;
 
     Peer(std::string ip, int port);
@@ -74,6 +76,8 @@ public:
         // Here we change party number from 2S 3C to 1S, 2C
         this->iopack_= new sci::IOPack(party-1, port);
         this->otpack = new sci::OTPack(this->iopack_, party-1);
+        this->block_ot = new sci::IKNP<sci::NetIO>(this->iopack_->io);
+        this->block_ot_reversed = new sci::IKNP<sci::NetIO>(this->iopack_->io_rev);
         if (this->MillInstance == NULL){
             this->MillInstance = new MillionaireProtocol(party - 1, iopack_, otpack);
         }
@@ -152,9 +156,9 @@ public:
 
     void recv_batched_input(uint64_t *g, int size, int bw);
 
-    void send_cot(osuCrypto::block, osuCrypto::block*, int)__attribute__((optimize("O0")));
+    void send_cot(osuCrypto::block, osuCrypto::block*, int, bool using_aux_iknp = false)__attribute__((optimize("O0")));
 
-    void recv_cot(osuCrypto::block* recv_arr, int size, bool* sel)__attribute__((optimize("O0")));
+    void recv_cot(osuCrypto::block* recv_arr, int size, bool* sel, bool using_aux_iknp = false)__attribute__((optimize("O0")));
 
     void send_cot(uint64_t, uint64_t*, int);
 

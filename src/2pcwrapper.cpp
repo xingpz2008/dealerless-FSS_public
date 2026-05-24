@@ -63,15 +63,15 @@ void multiplexer(int party_id, uint8_t *sel, block *dataA, block *output,
     switch(party_id){
         case 2:{
             for (int i=0; i < size; i++){
-                player->send_cot(dataA[i], &(OTRes[i]), 1);
-                player->recv_cot(&(AnotherOTRes[i]), 1, (bool*)sel);
+                player->send_cot(dataA[i], &(OTRes[i]), 1, false);
+                player->recv_cot(&(AnotherOTRes[i]), 1, (bool*)sel, true);
             }
             break;
         }
         case 3:{
             for (int i=0; i < size; i++){
-                player->recv_cot(&(OTRes[i]), 1, (bool*)sel);
-                player->send_cot(dataA[i], &(AnotherOTRes[i]), 1);
+                player->recv_cot(&(OTRes[i]), 1, (bool*)sel, false);
+                player->send_cot(dataA[i], &(AnotherOTRes[i]), 1, true);
             }
             break;
         }
@@ -141,14 +141,14 @@ void multiplexer(int party_id, uint8_t *sel, GroupElement *dataA, GroupElement *
     switch(party_id){
         case 2:{
             for (int i=0; i < size; i++){
-                player->send_cot(&(localShares[i]), &OTRes[i], 1, true);
+                player->send_cot(&(localShares[i]), &OTRes[i], 1, false);
                 player->recv_cot(&AnotherOTRes[i], 1, sel, true);
             }
             break;
         }
         case 3:{
             for (int i=0; i < size; i++){
-                player->recv_cot(&OTRes[i], 1, sel, true);
+                player->recv_cot(&OTRes[i], 1, sel, false);
                 player->send_cot(&(localShares[i]), &AnotherOTRes[i], 1, true);
             }
             break;
@@ -498,7 +498,7 @@ u8 cmp_2bit(int party_id, u8 a, u8 b, Peer* player){
 
 u8 cmp_2bit_opt(int party_id, u8 a, u8 b, Peer* player){
     // a is the higher bits
-    u8 out;
+    u8 out = 0;
     u8 and_share_0, and_share_1;
     and_share_0 = a;
     switch (party_id) {
@@ -521,6 +521,7 @@ void cmp_2bit_opt(int party_id, u8* a, u8* b, u8* output, int size, Peer* player
         and_share_0[i] = a[i];
         switch (party_id) {
             case 2:{
+                output[i] = 0;
                 and_share_1[i] = a[i] xor b[i] xor 1;
                 break;
             }
@@ -592,7 +593,7 @@ void cross_term_gen(int party_id, GroupElement* input, GroupElement* output, boo
         }
         // Call one round COT
         iteration_flag = 0;
-        player->send_cot(data_to_send, cot_output, iteration_size, true);
+        player->send_cot(data_to_send, cot_output, iteration_size, false);
         for (int i = 0; i < size; i++){
             for (int j = 0; j < uniform_bitsize; j++){
                 output[i] = output[i] - cot_output[j + i * uniform_bitsize];
@@ -611,7 +612,7 @@ void cross_term_gen(int party_id, GroupElement* input, GroupElement* output, boo
             }
         }
         // Call One round COT
-        player->recv_cot(cot_output, iteration_size, choice_bit, true);
+        player->recv_cot(cot_output, iteration_size, choice_bit, false);
         for (int i = 0; i < size; i++){
             for (int j = 0; j < uniform_bitsize; j++){
                 output[i] = output[i] + cot_output[j + i * uniform_bitsize];
@@ -650,7 +651,7 @@ void beaver_mult_offline(int party_id, GroupElement* a, GroupElement* b, GroupEl
             OTinputAB[i] = b[i];
             OTinputAB[i].bitsize = b[i].bitsize;
             OTinputAB[i + size] = a[i];
-            OTinputAB[i + size] = a[i].bitsize;
+            OTinputAB[i + size].bitsize = a[i].bitsize;
         }
     }
     // Then we have to call 2 COTs

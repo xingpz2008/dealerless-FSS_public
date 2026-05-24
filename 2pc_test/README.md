@@ -2,38 +2,64 @@
 
 ## Contents
 This repository consists of the following parts:
-- __GEN_TEST__: Scripts for testing dealer-less DPF/DCF scheme.
-- __BB_TEST__: Scripts for testing FSS-based building blocks.
-- __TRI_TEST__: Scripts for testing trigonometric evaluation framework.
-- __CASE_STUDIES__: Scripts for case studies performance.
+- __GEN_TEST__: Dealer-less DPF/DCF examples.
+- __BB_TEST__: FSS-based building-block examples.
+- __TRI_TEST__: Trigonometric evaluation examples.
+- __CASE_STUDIES__: Case-study performance drivers.
+- __CORRECTNESS_TEST__: Public correctness checks with pass/fail assertions.
 
 ## Compilation
 ```bash
-cd [GEN_TEST|BB_TEST|TRI_TEST|CASE_STUDIES]
-cmake .
-make
+# From the repository root
+cmake -S . -B build -DEZPC_ROOT=/path/to/EzPC
+cmake --build build --parallel
+```
+
+The test executables are placed under the matching `build/2pc_test`
+subdirectories. Each individual test directory can also be configured directly
+with CMake when `EZPC_ROOT` is provided.
+
+## Correctness Check
+
+The recommended correctness entry point is the repository-level helper:
+
+```bash
+scripts/run_correctness.sh --ezpc-root /path/to/EzPC
+```
+
+The helper starts both parties, checks the final result, and writes logs to
+`build/correctness-logs/`.
+
+To run a focused case:
+
+```bash
+scripts/run_correctness.sh --case 12   # sine, cosine, tangent
+scripts/run_correctness.sh --case 6    # containment
 ```
 
 ## Usage
-After compilation, there will be a binary executable in the sub-folder. As this is the two party computation (2PC), there should be two independent terminal (may use tmux) 
-and execute the following commands.
+After compilation, each test subdirectory has a binary executable. Run one party
+with `r=2` and the other party with `r=3`, using the same port `p`.
 
 General Arguments:
 
-`r` stands for the party number. For another terminal, execute the same command except `r=3`.
+`r` stands for the party number: `r=2` for server and `r=3` for client.
 
 `f` stands for the function type if the specification of this option is necessary. 
 
-`i` stands for the input bit length. In our experiment, it indicates that setting `i>18` may lead to unexpected program termination.
+`i` stands for the input bit length. The tested experiment range uses `i<=18`.
 
-`o` stands for the output bit length. In our experiment, it indicates that setting `o>18` may lead to unexpected program termination.
+`o` stands for the output bit length. The tested experiment range uses `o<=18`.
 
 `s` stands for the scale under fixed-point arithmetic.
 
+`p` stands for the TCP port. Use the same port for both parties.
+
 ### DPF (DCF) Test
 ```bash
-cd GEN_TEST
-./GEN_TEST r=2 f=0 i=8 o=8
+cd build/2pc_test/GEN_TEST
+./GEN_TEST r=2 p=32000 f=0 i=8 o=8
+./GEN_TEST r=3 p=32000 f=0 i=8 o=8
 ```
 Argument:
 
@@ -41,8 +67,9 @@ Argument:
 
 ### Building Block Test
 ```bash
-cd BB_TEST
-./BB_TEST r=2 f=0 i=8 o=8 s=5
+cd build/2pc_test/BB_TEST
+./BB_TEST r=2 p=32001 f=0 i=8 o=8 s=5
+./BB_TEST r=3 p=32001 f=0 i=8 o=8 s=5
 ```
 Argument:
 
@@ -63,29 +90,33 @@ For Spline Polynomial Approximation, variable `APPROX_DEG` determines approximat
 
 ### Trigonometric Test
 ```bash
-cd TRI_TEST
-./SIN_TEST r=2 f=0 i=8 o=8 s=5 l=1
+cd build/2pc_test/TRI_TEST
+./SIN_TEST r=2 p=32002 f=0 i=8 o=8 s=5 l=1
+./SIN_TEST r=3 p=32002 f=0 i=8 o=8 s=5 l=1
 ```
 Argument:
 
 `f` stands for the function type. Function choice: Sine = 0; Cosine = 1; Tangent = 2
 
 `l` stands for if Lookup Table implementation is used. 0 = Using Spline Polynomial Approximation. 
-Note that, we only implement 2-deg-16-segment approximation currently. 
-To test other settings, you have to construct the coefficient list first via `create_approx_spline` function from `src/utils.cpp`, which is a little bit complex.
+The current coefficient tables cover the tested 2-degree, 16-segment
+approximation settings. Additional settings can be added through
+`create_approx_spline` in `src/utils.cpp`.
 
 ### Case Studies Test
 ```bash
-cd CASE_STUDIES
-./PROX_TEST r=2
+cd build/2pc_test/CASE_STUDIES
+./PROX_TEST r=2 p=32003
+./PROX_TEST r=3 p=32003
 ```
 
 There are three test scripts in the folder.
 
-`ULP.cpp` is used to check the accuracy of out trigonometric framework.
+`ULP.cpp` is used to check the accuracy of the trigonometric framework.
 
-`Proximity.cpp` is used to test proximity testing function.
+`Proximity.cpp` is used to test the proximity testing function.
 
-`Biometric.cpp` is used to test biometric authentication function.
+`Biometric.cpp` contains the biometric authentication driver.
 
-To compile different test script, simply change `add_executable(PROX_TEST {TARGET CPP FILE NAME})` in `CASE_STUDIES/CMakeLists.txt`
+To build a different case-study driver, edit the executable target in
+`CASE_STUDIES/CMakeLists.txt`.

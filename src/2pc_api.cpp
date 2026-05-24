@@ -15,9 +15,116 @@
 
 #include "2pc_api.h"
 
+namespace {
+
+u8 wrap_of_shared_value(int party_id, GroupElement share) {
+    const uint64_t mask =
+        share.bitsize == 64 ? ~uint64_t(0) : ((uint64_t(1) << share.bitsize) - 1);
+    GroupElement mill_input = party_id == SERVER
+                                  ? share
+                                  : GroupElement(mask - share.value, share.bitsize);
+    u8 wrap = 0;
+    peer->mill(&wrap, &mill_input, 1);
+    return wrap;
+}
+
+GroupElement overflow_on_addition(int party_id, GroupElement lhs, GroupElement rhs,
+                                  int output_bits) {
+    assert(lhs.bitsize == rhs.bitsize);
+    GroupElement sum = lhs + rhs;
+    u8 wrap_bits[] = {
+        wrap_of_shared_value(party_id, sum),
+        wrap_of_shared_value(party_id, lhs),
+        wrap_of_shared_value(party_id, rhs),
+    };
+    GroupElement arithmetic_wraps[] = {
+        GroupElement(0, output_bits),
+        GroupElement(0, output_bits),
+        GroupElement(0, output_bits),
+    };
+    B2A(party_id, wrap_bits, arithmetic_wraps, 3, output_bits, peer);
+
+    const __uint128_t local_sum =
+        static_cast<__uint128_t>(lhs.value) + static_cast<__uint128_t>(rhs.value);
+    const uint64_t local_carry = local_sum >> lhs.bitsize;
+    return arithmetic_wraps[0] - arithmetic_wraps[1] - arithmetic_wraps[2] +
+           GroupElement(local_carry, output_bits);
+}
+
+GroupElement zero_extend_shared_value(int party_id, GroupElement share,
+                                      int output_bits) {
+    assert(output_bits >= share.bitsize);
+    if (output_bits == share.bitsize) {
+        return share;
+    }
+
+    u8 wrap = wrap_of_shared_value(party_id, share);
+    GroupElement arithmetic_wrap(0, output_bits);
+    B2A(party_id, &wrap, &arithmetic_wrap, 1, output_bits, peer);
+
+    GroupElement extended_share(share.value, output_bits);
+    return extended_share -
+           arithmetic_wrap * (uint64_t(1) << share.bitsize);
+}
+
+GroupElement zero_extend_public_value(GroupElement value, int output_bits) {
+    assert(output_bits >= value.bitsize);
+    return GroupElement(value.value, output_bits);
+}
+
+GroupElement sign_extend_public_value(GroupElement value, int output_bits) {
+    assert(output_bits >= value.bitsize);
+    uint64_t extended_value = value.value;
+    if (value.bitsize < 64 &&
+        value.value > ((uint64_t(1) << (value.bitsize - 1)) - 1)) {
+        extended_value |= ((uint64_t(1) << (output_bits - value.bitsize)) - 1)
+                          << value.bitsize;
+    }
+    return GroupElement(extended_value, output_bits);
+}
+
+}  // namespace
+
+GroupElement zero_extend(int party_id, GroupElement input, int output_bits) {
+    return zero_extend_shared_value(party_id, input, output_bits);
+}
+
+ComparisonKeyPack ring_extend_offline(int party_id, int input_bits,
+                                      int output_bits) {
+    assert(output_bits >= input_bits);
+    GroupElement threshold(
+        (uint64_t)(party_id - 2) * (uint64_t(1) << input_bits),
+        input_bits + 1);
+    GroupElement one((uint64_t)(party_id - 2), output_bits);
+    return comparison_offline(party_id, input_bits + 1, output_bits,
+                              threshold, &one, true);
+}
+
+GroupElement ring_extend(int party_id, GroupElement input, int output_bits,
+                         ComparisonKeyPack key) {
+    assert(output_bits >= input.bitsize);
+    if (output_bits == input.bitsize) {
+        freeComparisonKeyPack(key);
+        return input;
+    }
+
+    GroupElement lifted_input(input.value, input.bitsize + 1);
+    GroupElement is_below_threshold(0, output_bits);
+    comparison(party_id, &is_below_threshold, lifted_input, key);
+    freeComparisonKeyPack(key);
+
+    GroupElement one((uint64_t)(party_id - 2), output_bits);
+    GroupElement carry = one - is_below_threshold;
+    return GroupElement(input.value, output_bits) -
+           carry * (uint64_t(1) << input.bitsize);
+}
+
 ComparisonKeyPack comparison_offline(int party_id, int Bin, int Bout, GroupElement c, GroupElement* payload, bool public_payload = true){
     // c -> input
     // payload -> output
+    // Algorithm 6 consumes arithmetic payload shares through FMUL.
+    // Keep the flag for the existing API, but do not use the old local product shortcut.
+    (void) public_payload;
     assert((Bin == c.bitsize) && (Bout == payload->bitsize));
     ComparisonKeyPack key;
     key.Bin = c.bitsize;
@@ -28,24 +135,16 @@ ComparisonKeyPack comparison_offline(int party_id, int Bin, int Bout, GroupEleme
     mod(r);
     key.mask = r;
 
-    // Call F_Mill
-    uint8_t g = -1;
-    GroupElement g_(-1, Bout);
+    // Algorithm 6 needs the overflow bit of r + c in the input ring.
     GroupElement r_plus_c = r + c;
-    peer->mill(&g, &r, &r_plus_c, 1);
-    B2A(party_id, &g, &g_, 1, Bout, peer);
-    key.correction = g_ * *payload;
-
-    if (!public_payload){
-        // Call F_mult
-        GroupElement g_A(-1, Bout);
-        GroupElement a(-1, Bout);
-        GroupElement b(-1, Bout);
-        GroupElement c(-1, Bout);
-        beaver_mult_offline(party_id, &a, &b, &c, peer, 1);
-        beaver_mult_online(party_id, *payload, g_, a, b, c, &g_A, peer);
-        key.correction = g_A;
-    }
+    GroupElement g_ = overflow_on_addition(party_id, r, c, Bout);
+    GroupElement g_A(-1, Bout);
+    GroupElement a(-1, Bout);
+    GroupElement b(-1, Bout);
+    GroupElement mult_c(-1, Bout);
+    beaver_mult_offline(party_id, &a, &b, &mult_c, peer, 1);
+    beaver_mult_online(party_id, *payload, g_, a, b, mult_c, &g_A, peer);
+    key.correction = g_A;
 
     // Invoke 2 DCFs
     newDCFKeyPack* DCFKeyList = new newDCFKeyPack[2];
@@ -61,11 +160,12 @@ void comparison(int party_id, GroupElement* res, GroupElement idx, const Compari
     GroupElement real_idx = idx + key.mask;
     reconstruct(&real_idx);
     GroupElement* y = new GroupElement[2];
+    GroupElement eval_idx[2] = {real_idx, real_idx};
     for (int i = 0; i < 2; i++){
         y[i].bitsize = key.Bout;
     }
 
-    evalNewDCF(party_id, y, &real_idx, key.DCFKeyList, 2, key.Bin);
+    evalNewDCF(party_id, y, eval_idx, key.DCFKeyList, 2, key.Bin);
 
     *res = y[0] + y[1] + key.correction;
 
@@ -75,6 +175,7 @@ void comparison(int party_id, GroupElement* res, GroupElement idx, const Compari
 void comparison(int party_id, GroupElement* res, GroupElement* idx, ComparisonKeyPack* KeyList,
                 int size, int max_bitsize){
     GroupElement real_idx[size];
+    GroupElement eval_idx[2 * size];
     GroupElement* y = new GroupElement[2 * size];
     newDCFKeyPack unifiedKeyList[2 * size];
     for (int i = 0; i < size; i++){
@@ -85,8 +186,12 @@ void comparison(int party_id, GroupElement* res, GroupElement* idx, ComparisonKe
         unifiedKeyList[2 * i + 1] = KeyList[i].DCFKeyList[1];
     }
     reconstruct(size, real_idx, max_bitsize);
+    for (int i = 0; i < size; i++){
+        eval_idx[2 * i] = real_idx[i];
+        eval_idx[2 * i + 1] = real_idx[i];
+    }
 
-    evalNewDCF(party_id, y, real_idx, unifiedKeyList, 2 * size, max_bitsize);
+    evalNewDCF(party_id, y, eval_idx, unifiedKeyList, 2 * size, max_bitsize);
 
     for (int i = 0; i < size; i++){
         res[i] = y[2 * i] + y[2 * i + 1] + KeyList[i].correction;
@@ -119,28 +224,56 @@ GroupElement modular(int party_id, GroupElement input, int N, ModularKeyPack key
     return output;
 }
 
+ComparisonKeyPack sign_extend_offline(int party_id, int input_bits, int output_bits) {
+    GroupElement sign_threshold(
+        (uint64_t)(party_id - 2) * (uint64_t(1) << (input_bits - 1)),
+        input_bits);
+    GroupElement one((uint64_t)(party_id - 2), output_bits);
+    return comparison_offline(party_id, input_bits, output_bits,
+                              sign_threshold, &one);
+}
+
+GroupElement sign_extend_with_key(int party_id, GroupElement input,
+                                  int output_bits, ComparisonKeyPack key) {
+    GroupElement is_nonnegative(0, output_bits);
+    comparison(party_id, &is_nonnegative, input, key);
+    GroupElement unsigned_input = zero_extend_shared_value(party_id, input,
+                                                           output_bits);
+    GroupElement one((uint64_t)(party_id - 2), output_bits);
+    GroupElement sign = one - is_nonnegative;
+    return unsigned_input - sign * (uint64_t(1) << input.bitsize);
+}
+
 TRKeyPack truncate_and_reduce_offline(int party_id, int l, int s){
     // We use s + 1 bit comparison
     TRKeyPack output;
     output.Bin = s;
     output.Bout = l - s;
     output.s = s;
-    GroupElement two_power_s_minus_one((uint64_t)(party_id - 2) * ((1ULL << s) - 1), s + 1);
+    GroupElement two_power_s((uint64_t)(party_id - 2) * (1ULL << s), s + 1);
     GroupElement* one = new GroupElement((uint64_t)(party_id - 2), output.Bout);
-    output.ComparisonKey = comparison_offline(party_id, output.Bin + 1, output.Bout, two_power_s_minus_one, one);
+    output.ComparisonKey = comparison_offline(party_id, output.Bin + 1, output.Bout, two_power_s, one);
     delete one;
     return output;
 }
 
 GroupElement truncate_and_reduce(int party_id, GroupElement input, int s, TRKeyPack key){
     assert(s == key.s);
+    if (s == 0) {
+        freeTRKeyPack(key);
+        return input;
+    }
     GroupElement output(0, input.bitsize - s);
     // Parse input as l-s and l bit
     auto segmented_ge = segment(input, s);
+    // Lift the low shares before comparison so their addition keeps the carry bit.
+    segmented_ge.second.bitsize = s + 1;
     // Eval iDCF
     GroupElement* comparison_res = new GroupElement(-1, input.bitsize - s);
     comparison(party_id, comparison_res, segmented_ge.second, key.ComparisonKey);
-    output = segmented_ge.first + *comparison_res;
+    GroupElement one((uint64_t)(party_id - 2), input.bitsize - s);
+    GroupElement carry = one - *comparison_res;
+    output = segmented_ge.first + carry;
     delete comparison_res;
     // Need free TR Key
     freeTRKeyPack(key);
@@ -154,17 +287,39 @@ ContainmentKeyPack containment_offline(int party_id, int Bout, GroupElement* kno
     ContainmentKeyPack output;
     output.Bin = knots_list[0].bitsize;
     output.Bout = Bout;
-    output.AList = new GroupElement[knots_size];
-    output.BList = new GroupElement[knots_size];
-    output.CList = new GroupElement[knots_size];
+    const int mult_count = knots_size - 1;
+    output.AList = mult_count > 0 ? new GroupElement[mult_count] : nullptr;
+    output.BList = mult_count > 0 ? new GroupElement[mult_count] : nullptr;
+    output.CList = mult_count > 0 ? new GroupElement[mult_count] : nullptr;
     output.ComparisonKeyList = new ComparisonKeyPack[knots_size];
     output.CtnNum = knots_size;
-    beaver_mult_offline(party_id, output.AList, output.BList, output.CList, peer, knots_size);
+    for (int i = 0; i < mult_count; i++){
+        output.AList[i].bitsize = output.Bout;
+        output.BList[i].bitsize = output.Bout;
+        output.CList[i].bitsize = output.Bout;
+    }
+    if (mult_count > 0) {
+        beaver_mult_offline(party_id, output.AList, output.BList, output.CList,
+                            peer, mult_count);
+    }
     GroupElement* one = new GroupElement((uint64_t)(party_id - 2), output.Bout);
     for (int i = 0; i < knots_size; i++){
         output.ComparisonKeyList[i] = comparison_offline(party_id, output.Bin, output.Bout, knots_list[i], one);
     }
     delete one;
+    return output;
+}
+
+ContainmentKeyPack containment_offline_public(int party_id, int Bout,
+                                              GroupElement* knots_list,
+                                              int knots_size) {
+    GroupElement* shared_knots = new GroupElement[knots_size];
+    for (int i = 0; i < knots_size; i++) {
+        shared_knots[i] = knots_list[i] * (uint64_t)(party_id - 2);
+    }
+    ContainmentKeyPack output = containment_offline(
+        party_id, Bout, shared_knots, knots_size);
+    delete[] shared_knots;
     return output;
 }
 
@@ -177,25 +332,32 @@ void containment(int party_id, GroupElement input, GroupElement* output, int kno
     GroupElement* input_array = new GroupElement[knots_size];
     GroupElement* dcf_output = new GroupElement[knots_size];
 
+    for (int i = 0; i < knots_size + 1; i++){
+        output[i] = GroupElement(0, key.Bout);
+    }
     for (int i = 0; i < knots_size; i++){
         input_array[i] = input;
-        dcf_output[i].bitsize = output[i].bitsize;
+        dcf_output[i].bitsize = key.Bout;
     }
 
     comparison(party_id, dcf_output, input_array, key.ComparisonKeyList, knots_size, input.bitsize);
 
-    // Observation: We only need knots_num - 1 multiplication as the first segment is identical to DCF output.
+    // Endpoints are local: output[0] = c[0], output[last] = 1 - c[last].
     output[0] = dcf_output[0];
-    GroupElement* multA = new GroupElement[knots_size];
-    GroupElement* multB = new GroupElement[knots_size];
-    for (int i = 0; i < knots_size - 1; i++){
+    const int mult_count = knots_size - 1;
+    GroupElement* multA = mult_count > 0 ? new GroupElement[mult_count] : nullptr;
+    GroupElement* multB = mult_count > 0 ? new GroupElement[mult_count] : nullptr;
+    for (int i = 0; i < mult_count; i++){
         multA[i] = dcf_output[i + 1];
         multB[i] = dcf_output[i] * -1 + (uint64_t)(party_id - 2);
     }
-    multA[knots_size - 1] = GroupElement((uint64_t)(party_id - 2), multA[0].bitsize);
-    multB[knots_size - 1] = dcf_output[knots_size - 1] * -1 + (uint64_t)(party_id - 2);
-    beaver_mult_online(party_id, multA, multB, key.AList, key.BList, key.CList,
-                       &(output[1]), knots_size, peer);
+    if (mult_count > 0) {
+        beaver_mult_online(party_id, multA, multB, key.AList, key.BList,
+                           key.CList, &(output[1]), mult_count, peer);
+    }
+    output[knots_size] =
+        GroupElement((uint64_t)(party_id - 2), key.Bout) -
+        dcf_output[knots_size - 1];
 
     delete[] dcf_output;
     delete[] input_array;
@@ -220,11 +382,13 @@ DigDecKeyPack digdec_offline(int party_id, int Bin, int NewBitSize){
     GroupElement two_power_s_minus_one = GroupElement((uint64_t)(party_id - 2) * ((1ULL << NewBitSize) - 1), NewBitSize);
     GroupElement one = GroupElement((uint64_t)(party_id - 2), NewBitSize);
     // For comparison input, we use n+1 bit
-    GroupElement two_power_s_minus_one_ = GroupElement((uint64_t)(party_id - 2) * ((1ULL << NewBitSize) - 1), NewBitSize + 1);
+    GroupElement two_power_s_ =
+        GroupElement((uint64_t)(party_id - 2) * (1ULL << NewBitSize), NewBitSize + 1);
     GroupElement* one_ = new GroupElement((uint64_t)(party_id - 2), NewBitSize);
     for (int i = 0; i < SegNum - 1; i++){
         output.DPFKeyList[i] = keyGenDPF(party_id, NewBitSize, NewBitSize, two_power_s_minus_one, one, true);
-        output.ComparisonKeyList[i] = comparison_offline(party_id, NewBitSize + 1, NewBitSize, two_power_s_minus_one_, one_);
+        output.ComparisonKeyList[i] =
+            comparison_offline(party_id, NewBitSize + 1, NewBitSize, two_power_s_, one_);
     }
     // Perform multiplication offline, we need segNum - 1 AND (replaced by arithmetic multiplication)
     // Beaver triplet should be new bitsize bit.
@@ -274,13 +438,21 @@ void digdec(int party_id, GroupElement input, GroupElement* output, int NewBitSi
     }
 
     // Perform comparison and equality test
-    evalDPF(party_id, e, parsed_input, DPFKeyList, SegNum - 1, NewBitSize);
+    GroupElement* equality_input = new GroupElement[SegNum - 1];
+    for (int i = 0; i < SegNum - 1; i++){
+        equality_input[i] = parsed_input[i];
+    }
+    evalDPF(party_id, e, equality_input, DPFKeyList, SegNum - 1, NewBitSize);
+    delete[] equality_input;
 
     // Need to change bit length to NewBitSize + 1 ?
     for (int i = 0; i < SegNum; i++){
         parsed_input[i].bitsize = NewBitSize + 1;
     }
     comparison(party_id, w, parsed_input, ComparisonKeyList, SegNum - 1, NewBitSize + 1);
+    for (int i = 0; i < SegNum - 1; i++){
+        w[i] = GroupElement((uint64_t)(party_id - 2), NewBitSize) - w[i];
+    }
 
     // Recover Bit size
     for (int i = 0; i < SegNum; i++){
@@ -296,9 +468,12 @@ void digdec(int party_id, GroupElement input, GroupElement* output, int NewBitSi
         u[i].bitsize = NewBitSize;
         v[i].bitsize = NewBitSize;
         beaver_mult_online(party_id, u[i], e[i], AList[i], BList[i], CList[i],
-                           v + i * sizeof(GroupElement), peer);
+                           v + i, peer);
         // We directly ADD v and w, as there is no possibility that v=w=1 (e=w=1 is impossible)
         output[i + 1] = parsed_input[i + 1] + v[i] + w[i];
+        if (i + 1 < SegNum - 1){
+            u[i + 1] = v[i] + w[i];
+        }
     }
 
     freeDigDecKeyPack(key);
@@ -347,19 +522,13 @@ GroupElement pub_lut(int party_id, GroupElement input, GroupElement* table, Grou
     GroupElement key_index = *(key.random_mask);
     GroupElement shift_amount = input - key_index;
     reconstruct(&shift_amount);
-    GroupElement negative_point(1ULL << (shift_amount.bitsize - 1), shift_amount.bitsize);
-
-    // if bigger, then it is negative, causing ---x---r----, i.e. vector to left
-    bool left_flag = (shift_amount > negative_point);
-    GroupElement abs_val = left_flag ? shift_amount :
-            GroupElement((1ULL << shift_amount.bitsize) - shift_amount.value, shift_amount.bitsize);
-    mod(abs_val);
     bool output_vector = (shifted_full_domain_res != NULL);
     if (!output_vector){
         shifted_full_domain_res = new GroupElement[table_size];
     }
+    const int shift = shift_amount.value % table_size;
     for (int i = 0; i < table_size; i++){
-        int real_vector_idx = (i + abs_val.value * (2 * (int)left_flag - 1)) % table_size;
+        int real_vector_idx = (i + table_size - shift) % table_size;
         shifted_full_domain_res[i] = full_domain_res[real_vector_idx];
         // Perform multiplication on local table
         output = output + shifted_full_domain_res[i] * table[i];
@@ -388,8 +557,10 @@ PrivateLutKey pri_lut_offline(int party_id, int idx_bitlen, int lut_bitlen, Grou
     GroupElement random_mask(s, idx_bitlen);
     output.DPFKeyList = new DPFKeyPack[entry];
     for(int i = 0; i < entry; i++){
-        output.DPFKeyList[i] = keyGenDPF(party_id, idx_bitlen, lut_bitlen, (random_mask + i) * (uint64_t)(party_id - 2),
-                                         priList[i], false);
+        GroupElement shifted_mask =
+            random_mask + GroupElement(i * static_cast<uint64_t>(party_id - 2), idx_bitlen);
+        output.DPFKeyList[i] =
+            keyGenDPF(party_id, idx_bitlen, lut_bitlen, shifted_mask, priList[i], false);
     }
     output.random_mask = random_mask;
     return output;
@@ -414,7 +585,8 @@ GroupElement pri_lut(int party_id, GroupElement idx, PrivateLutKey key){
 }
 
 SplinePolyApproxKeyPack spline_poly_approx_offline(int party_id, int Bin, int Bout,
-                                                   GroupElement* publicCoefficientList, int degree, int segNum){
+                                                   GroupElement* publicCoefficientList, int degree,
+                                                   int segNum, int fixed_scale){
     // Offline generation of spline polynomial approximation
     // The input of publicCoefficient should be a, b, c for each interval (assume 2-degree)
     SplinePolyApproxKeyPack output;
@@ -422,58 +594,127 @@ SplinePolyApproxKeyPack spline_poly_approx_offline(int party_id, int Bin, int Bo
     output.Bout = Bout;
     output.degNum = degree;
     output.segNum = segNum;
+    output.fixed_scale = fixed_scale;
+    output.EvalSignKeyList = NULL;
+    output.EvalExtendKeyList = NULL;
+    output.EvalScaleTRKeyList = NULL;
+    output.EvalAList = NULL;
+    output.EvalBList = NULL;
+    output.EvalCList = NULL;
     int truncation_bits = Bin - log2floor(segNum);
     switch (degree) {
         case 2:{
-            // For two-degree polynomial, we have three coefficient ax2+bx+c -> ax2+(b-2ar)x+c+r2
             // The output coefficient list is stored as follows: aaaaabbbbbccccc
             GroupElement* coefficientList = new GroupElement[3 * segNum];
             GroupElement random_mask;
             prng.SetSeed(osuCrypto::toBlock(party_id, time(NULL)));
-            random_mask = GroupElement(prng.get<uint64_t>(), Bin);
+            random_mask = GroupElement(prng.get<uint64_t>(), Bout);
             mod(random_mask);
-            for (int i = 0; i < segNum; i++){
-                // create a:
-                // Converting into shares
-                coefficientList[i] = publicCoefficientList[i] * (uint64_t)(party_id - 2);
-            }
-            // create b:
-            // There should be a multiplication with a and r, here we need seg + 1 MTs in all
-            GroupElement* tmpA = new GroupElement[1 + segNum];
-            GroupElement* tmpB = new GroupElement[1 + segNum];
-            GroupElement* tmpC = new GroupElement[1 + segNum];
-            GroupElement* mulA = new GroupElement[1 + segNum];
-            GroupElement* mulB = new GroupElement[1 + segNum];
-            GroupElement* mulRes = new GroupElement[1 + segNum];
-            for (int j = 0; j < 1 + segNum; j++){
-                tmpA[j].bitsize = Bin;
-                tmpB[j].bitsize = Bin;
-                tmpC[j].bitsize = Bin;
-                if (j < segNum){
-                    mulA[j] = coefficientList[j];
-                }else{
-                    mulA[j] = random_mask;
+            if (fixed_scale > 0) {
+                const int product_bits = Bout + fixed_scale;
+                delete[] coefficientList;
+                coefficientList = new GroupElement[3 * segNum];
+                for (int i = 0; i < segNum; i++){
+                    GroupElement public_a =
+                        sign_extend_public_value(publicCoefficientList[i],
+                                                 product_bits);
+                    GroupElement public_b =
+                        sign_extend_public_value(
+                            publicCoefficientList[segNum + i], product_bits);
+                    GroupElement public_c =
+                        sign_extend_public_value(
+                            publicCoefficientList[2 * segNum + i],
+                            product_bits);
+                    coefficientList[i] =
+                        public_a * (uint64_t)(party_id - 2);
+                    coefficientList[segNum + i] =
+                        public_b * (uint64_t)(party_id - 2);
+                    coefficientList[2 * segNum + i] =
+                        public_c * (uint64_t)(party_id - 2);
                 }
-                mulB[j] = random_mask;
-                mulRes[j].bitsize = Bin;
+
+                output.EvalScaleTRKeyList = new TRKeyPack[degree + 1];
+                for (int i = 0; i < degree + 1; i++) {
+                    output.EvalScaleTRKeyList[i] =
+                        truncate_and_reduce_offline(party_id, product_bits,
+                                                    fixed_scale);
+                }
+                output.EvalExtendKeyList = new ComparisonKeyPack[2];
+                output.EvalExtendKeyList[0] =
+                    ring_extend_offline(party_id, Bin, product_bits);
+                output.EvalExtendKeyList[1] =
+                    ring_extend_offline(party_id, Bout, product_bits);
+                output.EvalAList = new GroupElement[degree + 1];
+                output.EvalBList = new GroupElement[degree + 1];
+                output.EvalCList = new GroupElement[degree + 1];
+                for (int i = 0; i < degree + 1; i++) {
+                    output.EvalAList[i].bitsize = product_bits;
+                    output.EvalBList[i].bitsize = product_bits;
+                    output.EvalCList[i].bitsize = product_bits;
+                }
+                beaver_mult_offline(party_id, output.EvalAList, output.EvalBList,
+                                    output.EvalCList, peer, degree + 1);
+            } else {
+                if (Bout > Bin) {
+                    output.EvalExtendKeyList = new ComparisonKeyPack[1];
+                    output.EvalExtendKeyList[0] =
+                        ring_extend_offline(party_id, Bin, Bout);
+                }
+                // For z = x + r, rewrite ax^2 + bx + c as
+                // az^2 + (b - 2ar)z + (ar^2 - br + c).
+                for (int i = 0; i < segNum; i++){
+                    // create a:
+                    // Converting into shares
+                    coefficientList[i] =
+                        zero_extend_public_value(publicCoefficientList[i], Bout) *
+                        (uint64_t)(party_id - 2);
+                }
+                // create b:
+                // There should be a multiplication with a and r, here we need seg + 1 MTs in all
+                GroupElement* tmpA = new GroupElement[1 + segNum];
+                GroupElement* tmpB = new GroupElement[1 + segNum];
+                GroupElement* tmpC = new GroupElement[1 + segNum];
+                GroupElement* mulA = new GroupElement[1 + segNum];
+                GroupElement* mulB = new GroupElement[1 + segNum];
+                GroupElement* mulRes = new GroupElement[1 + segNum];
+                for (int j = 0; j < 1 + segNum; j++){
+                    tmpA[j].bitsize = Bout;
+                    tmpB[j].bitsize = Bout;
+                    tmpC[j].bitsize = Bout;
+                    if (j < segNum){
+                        mulA[j] = coefficientList[j];
+                    }else{
+                        mulA[j] = random_mask;
+                    }
+                    mulB[j] = random_mask;
+                    mulRes[j].bitsize = Bout;
+                }
+                // TODO: check overhead statics here, put this multiplication overhead into full offline!
+                beaver_mult_offline(party_id, tmpA, tmpB, tmpC, peer, 1 + segNum);
+                beaver_mult_online(party_id, mulA, mulB, tmpA, tmpB, tmpC,
+                                   mulRes, 1 + segNum, peer);
+                // put b and c into their correct position
+                for (int i = 0; i < segNum; i++){
+                    GroupElement public_a =
+                        zero_extend_public_value(publicCoefficientList[i], Bout);
+                    GroupElement public_b =
+                        zero_extend_public_value(publicCoefficientList[segNum + i], Bout);
+                    GroupElement public_c =
+                        zero_extend_public_value(publicCoefficientList[2 * segNum + i], Bout);
+                    coefficientList[segNum + i] =
+                            public_b * (uint64_t)(party_id - 2) - mulRes[i] * 2;
+                    coefficientList[2 * segNum + i] =
+                            public_c * (uint64_t)(party_id - 2)
+                            + public_a * mulRes[segNum]
+                            - public_b * random_mask;
+                }
+                delete[] tmpA;
+                delete[] tmpB;
+                delete[] tmpC;
+                delete[] mulA;
+                delete[] mulB;
+                delete[] mulRes;
             }
-            // TODO: check overhead statics here, put this multiplication overhead into full offline!
-            beaver_mult_offline(party_id, tmpA, tmpB, tmpC, peer, 1 + segNum);
-            beaver_mult_online(party_id, mulA, mulB, tmpA, tmpB, tmpC,
-                               mulRes, 1 + segNum, peer);
-            // put b and c into their correct position
-            for (int i = 0; i < segNum; i++){
-                coefficientList[segNum + i] = publicCoefficientList[segNum + i] * (uint64_t)(party_id - 2)
-                        - mulRes[i] * 2;
-                coefficientList[2 * segNum + i] = publicCoefficientList[2 * segNum + i] * (uint64_t )(party_id - 2)
-                        + mulRes[segNum];
-            }
-            delete[] tmpA;
-            delete[] tmpB;
-            delete[] tmpC;
-            delete[] mulA;
-            delete[] mulB;
-            delete[] mulRes;
 
             output.coefficientList = coefficientList;
             output.random_mask = random_mask;
@@ -481,7 +722,8 @@ SplinePolyApproxKeyPack spline_poly_approx_offline(int party_id, int Bin, int Bo
             output.PriLUTKeyList = new PrivateLutKey[degree + 1];
             for (int i = 0; i < degree + 1; i++){
                 output.PriLUTKeyList[i] = pri_lut_offline(party_id, log2ceil(segNum),
-                                                          Bout, &(coefficientList[i * segNum]));
+                                                          coefficientList[i * segNum].bitsize,
+                                                          &(coefficientList[i * segNum]));
             }
             break;
         }
@@ -511,10 +753,8 @@ GroupElement spline_poly_approx(int party_id, GroupElement input, SplinePolyAppr
 
     switch (degNum) {
         case 2:{
-            // Now reconstruct input on all intervals
-            GroupElement real_input = input + random_mask;
-            reconstruct(&real_input);
-            GroupElement truncated_input = truncate_and_reduce(party_id, real_input * (uint64_t)(party_id - 2), input.bitsize - log2floor(segNum), TRKey);
+            GroupElement truncated_input = truncate_and_reduce(
+                    party_id, input, input.bitsize - log2floor(segNum), TRKey);
             // Call LUT
             // For degNum approx, we have deg + 1 coefficient
             // fetch coefficient
@@ -524,7 +764,51 @@ GroupElement spline_poly_approx(int party_id, GroupElement input, SplinePolyAppr
             }
 
             // Perform multiplication
-            output = lut_output[0] * real_input * real_input + lut_output[1] * real_input + lut_output[2];
+            if (key.fixed_scale > 0) {
+                const int product_bits = key.Bout + key.fixed_scale;
+                GroupElement extended_input = ring_extend(
+                    party_id, input, product_bits, key.EvalExtendKeyList[0]);
+
+                GroupElement raw_x_squared(0, product_bits);
+                beaver_mult_online(party_id, extended_input, extended_input,
+                                   key.EvalAList[0], key.EvalBList[0],
+                                   key.EvalCList[0], &raw_x_squared, peer);
+                GroupElement x_squared = truncate_and_reduce(
+                    party_id, raw_x_squared, key.fixed_scale,
+                    key.EvalScaleTRKeyList[0]);
+                GroupElement x_squared_extended =
+                    ring_extend(party_id, x_squared, product_bits,
+                                key.EvalExtendKeyList[1]);
+
+                GroupElement raw_ax_squared(0, product_bits);
+                beaver_mult_online(party_id, lut_output[0], x_squared_extended,
+                                   key.EvalAList[1], key.EvalBList[1],
+                                   key.EvalCList[1], &raw_ax_squared, peer);
+                GroupElement ax_squared = truncate_and_reduce(
+                    party_id, raw_ax_squared, key.fixed_scale,
+                    key.EvalScaleTRKeyList[1]);
+
+                GroupElement raw_bx(0, product_bits);
+                beaver_mult_online(party_id, lut_output[1], extended_input,
+                                   key.EvalAList[2], key.EvalBList[2],
+                                   key.EvalCList[2], &raw_bx, peer);
+                GroupElement bz = truncate_and_reduce(
+                    party_id, raw_bx, key.fixed_scale,
+                    key.EvalScaleTRKeyList[2]);
+                output = ax_squared + bz +
+                         GroupElement(lut_output[2].value, key.Bout);
+            } else {
+                // Now reconstruct input on all intervals
+                GroupElement extended_input =
+                    key.EvalExtendKeyList == NULL
+                        ? input
+                        : ring_extend(party_id, input, random_mask.bitsize,
+                                      key.EvalExtendKeyList[0]);
+                GroupElement real_input = extended_input + random_mask;
+                reconstruct(&real_input);
+                output = lut_output[0] * real_input * real_input +
+                         lut_output[1] * real_input + lut_output[2];
+            }
             break;
         }
         default:{
@@ -533,6 +817,162 @@ GroupElement spline_poly_approx(int party_id, GroupElement input, SplinePolyAppr
             exit(-1);
         }
     }
+    freeSplinePolyApproxKeyPack(key);
+    return output;
+}
+
+SplinePolyApproxKeyPack spline_poly_approx_offline_legacy_no_online_beaver(
+    int party_id, int Bin, int Bout, GroupElement* publicCoefficientList,
+    int degree, int segNum, int fixed_scale) {
+    // Deprecated baseline for performance comparisons only.
+    //
+    // This preserves the paper-style masked coefficient rewrite for the
+    // fixed-point path, so online evaluation only multiplies selected secret
+    // coefficients by public powers of z = x + r. It is not correctness-safe
+    // for the current step-by-step fixed-point truncation semantics.
+    if (fixed_scale == 0) {
+        return spline_poly_approx_offline(
+            party_id, Bin, Bout, publicCoefficientList, degree, segNum,
+            fixed_scale);
+    }
+    if (degree != 2) {
+        std::cout << "[ERROR] Unsupported approx degree!" << std::endl;
+        exit(-1);
+    }
+
+    SplinePolyApproxKeyPack output;
+    output.Bin = Bin;
+    output.Bout = Bout;
+    output.degNum = degree;
+    output.segNum = segNum;
+    output.fixed_scale = fixed_scale;
+    output.EvalSignKeyList = NULL;
+    output.EvalExtendKeyList = NULL;
+    output.EvalScaleTRKeyList = NULL;
+    output.EvalAList = NULL;
+    output.EvalBList = NULL;
+    output.EvalCList = NULL;
+
+    GroupElement* coefficientList = new GroupElement[3 * segNum];
+    prng.SetSeed(osuCrypto::toBlock(party_id, time(NULL)));
+    GroupElement random_mask(prng.get<uint64_t>(), Bin);
+    mod(random_mask);
+
+    const int product_bits = Bout + fixed_scale;
+    GroupElement r_extended =
+        zero_extend_shared_value(party_id, random_mask, product_bits);
+    GroupElement rr_a(0, product_bits), rr_b(0, product_bits);
+    GroupElement rr_c(0, product_bits), rr_raw(0, product_bits);
+    beaver_mult_offline(party_id, &rr_a, &rr_b, &rr_c, peer, 1);
+    beaver_mult_online(party_id, r_extended, r_extended, rr_a, rr_b, rr_c,
+                       &rr_raw, peer);
+    TRKeyPack rr_tr_key =
+        truncate_and_reduce_offline(party_id, product_bits, fixed_scale);
+    GroupElement r_squared =
+        truncate_and_reduce(party_id, rr_raw, fixed_scale, rr_tr_key);
+    GroupElement r_squared_extended =
+        zero_extend_shared_value(party_id, r_squared, product_bits);
+
+    for (int i = 0; i < segNum; i++) {
+        GroupElement public_a(publicCoefficientList[i].value, Bout);
+        GroupElement public_b(publicCoefficientList[segNum + i].value, Bout);
+        GroupElement public_c(publicCoefficientList[2 * segNum + i].value,
+                              Bout);
+        GroupElement public_a_extended =
+            sign_extend_public_value(public_a, product_bits);
+        GroupElement public_b_extended =
+            sign_extend_public_value(public_b, product_bits);
+
+        TRKeyPack ar_tr_key =
+            truncate_and_reduce_offline(party_id, product_bits, fixed_scale);
+        TRKeyPack br_tr_key =
+            truncate_and_reduce_offline(party_id, product_bits, fixed_scale);
+        TRKeyPack ar2_tr_key =
+            truncate_and_reduce_offline(party_id, product_bits, fixed_scale);
+        GroupElement ar = truncate_and_reduce(
+            party_id, r_extended * public_a_extended, fixed_scale, ar_tr_key);
+        GroupElement br = truncate_and_reduce(
+            party_id, r_extended * public_b_extended, fixed_scale, br_tr_key);
+        GroupElement ar2 = truncate_and_reduce(
+            party_id, r_squared_extended * public_a_extended, fixed_scale,
+            ar2_tr_key);
+
+        coefficientList[i] = public_a * (uint64_t)(party_id - 2);
+        coefficientList[segNum + i] =
+            public_b * (uint64_t)(party_id - 2) - ar * 2;
+        coefficientList[2 * segNum + i] =
+            public_c * (uint64_t)(party_id - 2) + ar2 - br;
+    }
+
+    output.EvalSignKeyList = new ComparisonKeyPack[degree];
+    output.EvalScaleTRKeyList = new TRKeyPack[degree];
+    for (int i = 0; i < degree; i++) {
+        output.EvalSignKeyList[i] =
+            sign_extend_offline(party_id, Bout, product_bits);
+        output.EvalScaleTRKeyList[i] =
+            truncate_and_reduce_offline(party_id, product_bits, fixed_scale);
+    }
+
+    output.coefficientList = coefficientList;
+    output.random_mask = random_mask;
+    const int truncation_bits = Bin - log2floor(segNum);
+    output.TRKey = truncate_and_reduce_offline(party_id, Bin, truncation_bits);
+    output.PriLUTKeyList = new PrivateLutKey[degree + 1];
+    for (int i = 0; i < degree + 1; i++) {
+        output.PriLUTKeyList[i] = pri_lut_offline(
+            party_id, log2ceil(segNum), Bout, &(coefficientList[i * segNum]));
+    }
+
+    return output;
+}
+
+GroupElement spline_poly_approx_legacy_no_online_beaver(
+    int party_id, GroupElement input, SplinePolyApproxKeyPack key) {
+    // Deprecated baseline for performance comparisons only. For fixed-point
+    // Approx this can produce mask-dependent numerical errors.
+    if (key.fixed_scale == 0) {
+        return spline_poly_approx(party_id, input, key);
+    }
+    if (key.degNum != 2) {
+        freeSplinePolyApproxKeyPack(key);
+        std::cout << "[ERROR] Unsupported approx degree!" << std::endl;
+        exit(-1);
+    }
+
+    const int product_bits = key.Bout + key.fixed_scale;
+    GroupElement truncated_input = truncate_and_reduce(
+        party_id, input, input.bitsize - log2floor(key.segNum), key.TRKey);
+    GroupElement lut_output[3];
+    for (int i = 0; i < 3; i++) {
+        lut_output[i] =
+            pri_lut(party_id, truncated_input, key.PriLUTKeyList[i]);
+    }
+
+    GroupElement extended_input =
+        zero_extend_shared_value(party_id, input, key.random_mask.bitsize);
+    GroupElement real_input = extended_input + key.random_mask;
+    reconstruct(&real_input);
+    GroupElement real_input_base(real_input.value, key.Bout);
+    GroupElement real_input_squared =
+        scale_mult(real_input_base, real_input_base, key.fixed_scale);
+    GroupElement real_input_extended =
+        zero_extend_public_value(real_input_base, product_bits);
+    GroupElement real_input_squared_extended =
+        zero_extend_public_value(real_input_squared, product_bits);
+
+    GroupElement coefficient_a = sign_extend_with_key(
+        party_id, lut_output[0], product_bits, key.EvalSignKeyList[0]);
+    GroupElement coefficient_b = sign_extend_with_key(
+        party_id, lut_output[1], product_bits, key.EvalSignKeyList[1]);
+
+    GroupElement az = truncate_and_reduce(
+        party_id, coefficient_a * real_input_squared_extended,
+        key.fixed_scale, key.EvalScaleTRKeyList[0]);
+    GroupElement bz = truncate_and_reduce(
+        party_id, coefficient_b * real_input_extended, key.fixed_scale,
+        key.EvalScaleTRKeyList[1]);
+    GroupElement output = az + bz + lut_output[2];
+
     freeSplinePolyApproxKeyPack(key);
     return output;
 }

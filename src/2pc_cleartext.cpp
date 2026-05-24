@@ -102,13 +102,14 @@ GroupElement cleartext_sin(GroupElement input, int scale, bool using_lut){
         delete[] cos_lut[0];
         delete[] cos_lut[1];
     }else{
+        const int eval_bits = fixed_point_approx_eval_bits(Bin, scale);
         GroupElement x_tr = segment(x_frac, scale - 5).first;
         GroupElement* coefs = new GroupElement[48];
         // Changed, scale - 1 to ell
-        create_approx_spline(0216, Bin, scale, coefs);
+        create_approx_spline(216, eval_bits, scale, coefs);
         // ax2+bx+c -> ax2+(b-2ar)x+c+r2 ,def
         int r = 0;
-        GroupElement mask = GroupElement(r, Bin, scale);
+        GroupElement mask = GroupElement(r, eval_bits, scale);
         mod(mask);
         for (int i = 0; i < 16; i++){
             coefs[16 + i] = coefs[16 + i] - scale_mult(coefs[i], mask, scale) - scale_mult(coefs[i], mask, scale);
@@ -121,20 +122,20 @@ GroupElement cleartext_sin(GroupElement input, int scale, bool using_lut){
         // Note: We modify here as 1 cannot be represented in Fixed-pt Arithmetic thus cause 0 output.
         // This modification do not affect the correctness of protocol as the implementation is priLUT with l_out bitlength.
         for (int i = 0; i < 16; i++){
-            dpf_output[i] = GroupElement(0, Bin);
+            dpf_output[i] = GroupElement(0, eval_bits);
         }
-        dpf_output[x_tr.value] = GroupElement(1, Bin);
+        dpf_output[x_tr.value] = GroupElement(1, eval_bits);
         GroupElement d = inner_product(dpf_output, coefs, 16, scale);
         GroupElement e = inner_product(dpf_output, &(coefs[16]), 16, scale);
         GroupElement f = inner_product(dpf_output, &(coefs[32]), 16, scale);
 
-        x_frac.bitsize = Bin;
-        a.bitsize = Bin;
-        GroupElement x2 = scale_mult(x_frac, x_frac, scale);
+        GroupElement x_eval(x_frac.value, eval_bits);
+        GroupElement a_eval((uint64_t)getSignedValue(a), eval_bits);
+        GroupElement x2 = scale_mult(x_eval, x_eval, scale);
         GroupElement ax2 = scale_mult(d, x2, scale);
-        GroupElement bx = scale_mult(e, x_frac, scale);
+        GroupElement bx = scale_mult(e, x_eval, scale);
         GroupElement tmp_res = ax2 + bx + f;
-        output = scale_mult(tmp_res, a, scale);
+        output = GroupElement(scale_mult(tmp_res, a_eval, scale).value, Bin);
         delete[] coefs;
         delete[] dpf_output;
     }
@@ -223,13 +224,14 @@ GroupElement cleartext_cosine(GroupElement input, int scale, bool using_lut){
         delete[] cos_lut[0];
         delete[] cos_lut[1];
     }else{
+        const int eval_bits = fixed_point_approx_eval_bits(Bin, scale);
         GroupElement x_tr = segment(x_frac, scale - 5).first;
         GroupElement* coefs = new GroupElement[48];
         // Changed, scale - 1 to ell
-        create_approx_spline(1216, Bin, scale, coefs);
+        create_approx_spline(1216, eval_bits, scale, coefs);
         // ax2+bx+c -> ax2+(b-2ar)x+c+r2 ,def
         int r = 0;
-        GroupElement mask = GroupElement(r, Bin, scale);
+        GroupElement mask = GroupElement(r, eval_bits, scale);
         mod(mask);
         for (int i = 0; i < 16; i++){
             coefs[16 + i] = coefs[16 + i] - scale_mult(coefs[i], mask, scale) - scale_mult(coefs[i], mask, scale);
@@ -242,20 +244,20 @@ GroupElement cleartext_cosine(GroupElement input, int scale, bool using_lut){
         // Note: We modify here as 1 cannot be represented in Fixed-pt Arithmetic thus cause 0 output.
         // This modification do not affect the correctness of protocol as the implementation is priLUT with l_out bitlength.
         for (int i = 0; i < 16; i++){
-            dpf_output[i] = GroupElement(0, Bin);
+            dpf_output[i] = GroupElement(0, eval_bits);
         }
-        dpf_output[x_tr.value] = GroupElement(1, Bin);
+        dpf_output[x_tr.value] = GroupElement(1, eval_bits);
         GroupElement d = inner_product(dpf_output, coefs, 16, scale);
         GroupElement e = inner_product(dpf_output, &(coefs[16]), 16, scale);
         GroupElement f = inner_product(dpf_output, &(coefs[32]), 16, scale);
 
-        x_frac.bitsize = Bin;
-        a.bitsize = Bin;
-        GroupElement x2 = scale_mult(x_frac, x_frac, scale);
+        GroupElement x_eval(x_frac.value, eval_bits);
+        GroupElement a_eval((uint64_t)getSignedValue(a), eval_bits);
+        GroupElement x2 = scale_mult(x_eval, x_eval, scale);
         GroupElement ax2 = scale_mult(d, x2, scale);
-        GroupElement bx = scale_mult(e, x_frac, scale);
+        GroupElement bx = scale_mult(e, x_eval, scale);
         GroupElement tmp_res = ax2 + bx + f;
-        output = scale_mult(tmp_res, a, scale);
+        output = GroupElement(scale_mult(tmp_res, a_eval, scale).value, Bin);
         delete[] coefs;
     }
 
@@ -273,25 +275,13 @@ GroupElement cleartext_tangent(GroupElement input, int scale, bool using_lut){
     if (_x_mod > one){
         x_mod = _x_mod - one;
     }
-    GroupElement interval[2];
-    for (int i = 0; i < 2; i++){
-        interval[i] = GroupElement(0, 1 + scale);
+    GroupElement half = GroupElement(0.5, 1 + scale, scale);
+    GroupElement a = GroupElement(1, Bin, scale);
+    GroupElement _x_frac = x_mod;
+    if (!(x_mod < half)) {
+        a = GroupElement(-1, Bin, scale);
+        _x_frac = one - x_mod;
     }
-    for (int i = 0; i < 2; i++){
-        if (x_mod < GroupElement(0.5, 1 + scale, scale)){
-            interval[0] = GroupElement(1, 1 + scale, scale);
-        }else{
-            interval[1] = GroupElement(1, 1 + scale, scale);
-        }
-    }
-    GroupElement* trans_list = new GroupElement[6];
-    // We start with aaaa
-    create_approx_spline(2000, 1 + scale, scale, trans_list);
-    GroupElement a = inner_product(interval, trans_list, 2, scale);
-    GroupElement b = inner_product(interval, &(trans_list[2]), 2, scale);
-    GroupElement c = inner_product(interval, &(trans_list[4]), 2, scale);
-
-    GroupElement _x_frac = scale_mult(b, x_mod, scale, false) + c;
     GroupElement x_frac = segment(_x_frac, scale - 1).second;
 
     if (using_lut){
@@ -311,18 +301,18 @@ GroupElement cleartext_tangent(GroupElement input, int scale, bool using_lut){
 
         GroupElement tan_x = inner_product(dpf_x, tan_lut[0],  1 << ((scale - 1)), scale);
 
-        // TODO: Add check for isSigned instead of hard coding.
-        output = scale_mult(tan_x, a, scale, false);
+        output = scale_mult(tan_x, a, scale);
 
         delete[] tan_lut[0];
     }else{
+        const int eval_bits = fixed_point_approx_eval_bits(Bin, scale);
         GroupElement x_tr = segment(x_frac, scale - 5).first;
         GroupElement* coefs = new GroupElement[48];
         // Changed, scale - 1 to ell
-        create_approx_spline(2216, Bin, scale, coefs);
+        create_approx_spline(2216, eval_bits, scale, coefs);
         // ax2+bx+c -> ax2+(b-2ar)x+c+r2 ,def
         int r = 0;
-        GroupElement mask = GroupElement(r, Bin, scale);
+        GroupElement mask = GroupElement(r, eval_bits, scale);
         mod(mask);
         for (int i = 0; i < 16; i++){
             coefs[16 + i] = coefs[16 + i] - scale_mult(coefs[i], mask, scale) - scale_mult(coefs[i], mask, scale);
@@ -334,25 +324,22 @@ GroupElement cleartext_tangent(GroupElement input, int scale, bool using_lut){
         // Note: We modify here as 1 cannot be represented in Fixed-pt Arithmetic thus cause 0 output.
         // This modification do not affect the correctness of protocol as the implementation is priLUT with l_out bitlength.
         for (int i = 0; i < 16; i++){
-            dpf_output[i] = GroupElement(0, Bin);
+            dpf_output[i] = GroupElement(0, eval_bits);
         }
-        dpf_output[x_tr.value] = GroupElement(1, Bin);
+        dpf_output[x_tr.value] = GroupElement(1, eval_bits);
         GroupElement d = inner_product(dpf_output, coefs, 16, scale);
         GroupElement e = inner_product(dpf_output, &(coefs[16]), 16, scale);
         GroupElement f = inner_product(dpf_output, &(coefs[32]), 16, scale);
 
-        x_frac.bitsize = Bin;
-        a.bitsize = Bin;
-        GroupElement x2 = scale_mult(x_frac, x_frac, scale);
+        GroupElement x_eval(x_frac.value, eval_bits);
+        GroupElement a_eval((uint64_t)getSignedValue(a), eval_bits);
+        GroupElement x2 = scale_mult(x_eval, x_eval, scale);
         GroupElement ax2 = scale_mult(d, x2, scale);
-        GroupElement bx = scale_mult(e, x_frac, scale);
+        GroupElement bx = scale_mult(e, x_eval, scale);
         GroupElement tmp_res = ax2 + bx + f;
-        output = scale_mult(tmp_res, a, scale);
+        output = GroupElement(scale_mult(tmp_res, a_eval, scale).value, Bin);
         delete[] coefs;
     }
-
-
-    delete[] trans_list;
     return output;
 }
 

@@ -46,7 +46,10 @@ struct GroupElement {
     GroupElement(float value, int bitsize, int scale)
     {
         this->bitsize = bitsize;
-        this->value = ((uint64_t)(value * (1 << scale))) % (1ULL << bitsize);
+        int64_t scaled_value = static_cast<int64_t>(value * (1ULL << scale));
+        this->value = static_cast<uint64_t>(scaled_value);
+        if (bitsize != 64)
+            this->value = this->value % (uint64_t(1) << bitsize);
     }
 
     GroupElement(const GroupElement& other)

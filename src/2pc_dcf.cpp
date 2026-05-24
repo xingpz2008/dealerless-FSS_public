@@ -190,7 +190,7 @@ newDCFKeyPack keyGenNewDCF(int party_id, int Bin, int Bout, GroupElement idx, Gr
 
         u8 cmp_tau_0_ = (u8)(thisControlBitSum & 1);
         u8 cmp_tau_1_ = (u8)((thisControlBitSum >> 1) & 1);
-        u8 g = cmp_2bit_opt(party_id, cmp_tau_0_, cmp_tau_1_, peer);
+        u8 g = cmp_2bit_opt(party_id, cmp_tau_1_, cmp_tau_0_, peer);
 
         // We reuse mux_input here, get phi
         GroupElement phi_input_A = v0;
@@ -212,8 +212,9 @@ newDCFKeyPack keyGenNewDCF(int party_id, int Bin, int Bout, GroupElement idx, Gr
         multiplexer2(party_id, &(real_idx[i]), &zero, &payload, eta_output, 1, peer);
 
         // Set Vcw
-        GroupElement vcw_0 = *phi_output - v_alpha + *eta_output;
-        GroupElement vcw_1 = -*phi_output + v_alpha - *eta_output;
+        GroupElement v_alpha_share = v_alpha * static_cast<uint64_t>(party_id == SERVER);
+        GroupElement vcw_0 = *phi_output - v_alpha_share + *eta_output;
+        GroupElement vcw_1 = -*phi_output + v_alpha_share - *eta_output;
         GroupElement* vcw_output = new GroupElement;
         multiplexer2(party_id, &g, &vcw_0, &vcw_1, vcw_output, 1, peer);
 
@@ -223,7 +224,11 @@ newDCFKeyPack keyGenNewDCF(int party_id, int Bin, int Bout, GroupElement idx, Gr
         GroupElement* g_a = new GroupElement;
         g_a->bitsize = Bout;
         B2A(party_id, &g, g_a, 1, Bout, peer);
-        GroupElement v_alpha_hat = v_alpha + theta + (*g_a * (-2) + 1) * *vcw_output;
+        // Inject public constants into one additive share before reconstruction.
+        GroupElement public_share(static_cast<uint64_t>(party_id == SERVER), Bout);
+        GroupElement v_alpha_update_share = v_alpha * public_share.value;
+        GroupElement sign_share = *g_a * (-2) + public_share;
+        GroupElement v_alpha_hat = v_alpha_update_share + theta + sign_share * *vcw_output;
         reconstruct(&v_alpha_hat);
         v_alpha = v_alpha_hat;
 
@@ -256,8 +261,9 @@ newDCFKeyPack keyGenNewDCF(int party_id, int Bin, int Bout, GroupElement idx, Gr
     u8 cmp_tau_1 = (u8)((controlBitSum >> 1) & 1);
     u8 t = cmp_2bit_opt(party_id, cmp_tau_1, cmp_tau_0, peer);
     GroupElement sign(((party_id-2) == 1) ? 1 : -1, Bout);
-    GroupElement W_CW_0 = -v_alpha + lastLevelSum * sign;
-    GroupElement W_CW_1 = v_alpha + lastLevelSum * (-sign);
+    GroupElement v_alpha_share = v_alpha * static_cast<uint64_t>(party_id == SERVER);
+    GroupElement W_CW_0 = -v_alpha_share + lastLevelSum * sign;
+    GroupElement W_CW_1 = v_alpha_share + lastLevelSum * (-sign);
     auto* W_CW = new GroupElement(0, Bout);
     multiplexer2(party_id, &t, &W_CW_0, &W_CW_1, W_CW, 1, peer);
     reconstruct(W_CW);
@@ -563,7 +569,10 @@ void evalNewDCF(int party, GroupElement* res, GroupElement* idx, newDCFKeyPack* 
     // Final V calculation
     for (int i = 0; i < size; i++){
         two_pc_convert(Bout[i], &(levelNodes[i]), &(converted_val[i]), &(null_block[i]));
-        res[i] = V[i] + (((party - 2) == 0) ? 1 : (-1)) * (converted_val[i] + g_list[i][Bin[i]] * (uint64_t)controlBit[i]);
+        GroupElement final_term =
+            (((party - 2) == 0) ? 1 : (-1)) *
+            (converted_val[i] + g_list[i][Bin[i]] * (uint64_t)controlBit[i]);
+        res[i] = V[i] + final_term;
     }
 
     delete[] converted_val;

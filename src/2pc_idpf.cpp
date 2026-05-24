@@ -144,7 +144,6 @@ DPFKeyPack keyGenDPF(int party_id, int Bin, int Bout,
         for (int j = 0; j < expandNum; j++){
             // To expand, we first set AES enc keys, with 2^i AES instances
             AESInstance.setKey(levelNodes[j]);
-            std::cout << levelNodes[j] << ", " << (int)levelControlBits[j]<< std::endl;
 
             // Then we call enc to get 2 blocks, as left and right child in the next level
             AESInstance.ecbEncTwoBlocks(pt, ct);
@@ -766,71 +765,50 @@ void evalDPF(int party, GroupElement *res, GroupElement *idx, DPFKeyPack *keyLis
 }
 
 void evalAll(int party, GroupElement* res, DPFKeyPack key, int length){
-    // This is the implementation of all domain evaluation for evalAll
-    // The optimization is that we do not have to compute the same PRG twice
-    GroupElement mask = *(key.random_mask);
-    // We first allocate memory for PRG dict, that is 2^n+1 - 1
-    int blockNum = (1 << (length + 1)) - 1;
-    block* dict[blockNum];
-    for (int i = 0; i < blockNum; i++){
-        dict[i] = NULL;
-    }
-    int evalNum = 1 << length;
+    assert(length == key.Bin);
+    const int leaf_num = 1 << length;
+    block* level_nodes = new block[leaf_num];
+    block* next_nodes = new block[leaf_num];
+    u8* control_bits = new u8[leaf_num];
+    u8* next_control_bits = new u8[leaf_num];
+    level_nodes[0] = key.k[0];
+    control_bits[0] = static_cast<u8>(party - 2);
 
-    // Parse from key
-    GroupElement real_input(0, length);
-    block* scw = key.k;
-    GroupElement* wcw = key.g;
-    u8* tau = key.v;
-    block levelNodes;
-    u8 controlBit;
-    u8 level_tau;
-    static const block notOneBlock = osuCrypto::toBlock(~0, ~1);
-    static const block notThreeBlock = osuCrypto::toBlock(~0, ~3);
     const static block pt[2] = {ZeroBlock, OneBlock};
+    osuCrypto::AES aes;
     block ct[2];
-    osuCrypto::AES AESInstance;
-    int Bin = key.Bin;
-    int Bout = key.Bout;
-    int dict_iterator;
-    int sign = (party - 2) ? -1 : 1;
-    uint64_t* convert_res = new uint64_t;
-
-    for (int i = 0; i < evalNum; i++){
-        levelNodes = scw[0];
-        controlBit = (u8)(party - 2);
-        level_tau = controlBit;
-        // Considering the usage in our work, we do not need the real input to add mask
-        real_input = i;
-        dict_iterator = 0;
-        for (int j = 0; j < Bin; j++){
-            dict_iterator += (real_input[j] << j);
-            if (dict[dict_iterator] == NULL){
-                AESInstance.setKey(levelNodes);
-                AESInstance.ecbEncTwoBlocks(pt, ct);
-                dict[dict_iterator] = new block[2];
-                dict[dict_iterator][0] = ct[0];
-                dict[dict_iterator][1] = ct[1];
-            }else{
-                ct[0] = dict[dict_iterator][0];
-                ct[1] = dict[dict_iterator][1];
-            }
-            block levelCW = scw[j + 1];
-            level_tau = tau[2 * j + (int)(real_input[j])];
-            if (controlBit == (u8)1){
-                levelNodes = ct[(int)(real_input[j])] ^  levelCW;
-                controlBit = lsb(ct[(int)(real_input[j])]) ^ level_tau;
-            }else{
-                levelNodes = ct[(int)(real_input[j])];
-                controlBit = lsb(ct[(int)(real_input[j])]);
+    int level_size = 1;
+    for (int level = 0; level < length; level++){
+        for (int node = 0; node < level_size; node++){
+            aes.setKey(level_nodes[node]);
+            aes.ecbEncTwoBlocks(pt, ct);
+            for (int branch = 0; branch < 2; branch++){
+                const int child = 2 * node + branch;
+                next_nodes[child] = ct[branch];
+                next_control_bits[child] = lsb(ct[branch]);
+                if (control_bits[node] == static_cast<u8>(1)){
+                    next_nodes[child] = next_nodes[child] ^ key.k[level + 1];
+                    next_control_bits[child] =
+                        next_control_bits[child] ^ key.v[2 * level + branch];
+                }
             }
         }
-        two_pc_convert(Bout, levelNodes, convert_res);
-        res[i] = (wcw[0] * (uint64_t) controlBit + *convert_res) * sign;
+        for (int node = 0; node < 2 * level_size; node++){
+            level_nodes[node] = next_nodes[node];
+            control_bits[node] = next_control_bits[node];
+        }
+        level_size *= 2;
     }
-    // Free all space
-    for (int i = 0; i < blockNum; i++){
-        delete[] dict[i];
+
+    const int sign = (party - 2) ? -1 : 1;
+    for (int i = 0; i < leaf_num; i++){
+        uint64_t converted = 0;
+        two_pc_convert(key.Bout, level_nodes[i], &converted);
+        res[i] = (key.g[0] * static_cast<uint64_t>(control_bits[i]) + converted) * sign;
     }
-    delete convert_res;
+
+    delete[] level_nodes;
+    delete[] next_nodes;
+    delete[] control_bits;
+    delete[] next_control_bits;
 }

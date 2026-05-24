@@ -11,11 +11,11 @@
  * Change Log:
  * 2024-12-02 - Initial version of the authentication module
  */
-#include "../../src/2pc_idpf.h"
-#include "../../src/group_element.h"
-#include "../../src/ArgMapping.h"
-#include "../../src/2pc_dcf.h"
-#include "../../src/2pc_api.h"
+#include "2pc_idpf.h"
+#include "group_element.h"
+#include "ArgMapping.h"
+#include "2pc_dcf.h"
+#include "2pc_api.h"
 #include<iostream>
 
 int party_instance = 0;
@@ -40,7 +40,7 @@ Peer* client = nullptr;
 Peer* server = nullptr;
 Dealer* dealer = nullptr;
 Peer* peer = nullptr;
-int function = 0;
+int function_choice = 0;
 
 #define MODULAR 1
 int MODULAR_N = 2;
@@ -73,7 +73,7 @@ int main(int argc, char **argv){
     amap.arg("v", verbose, "Verbose");
     amap.arg("i", Bin, "bit length in");
     amap.arg("o", Bout, "bit length");
-    amap.arg("f", function, "function");
+    amap.arg("f", function_choice, "function");
     amap.arg("s", scale, "Scale");
     amap.parse(argc, argv);
 
@@ -97,14 +97,14 @@ int main(int argc, char **argv){
     uint64_t mid_byte, mid_rounds;
 
     if(party==CLIENT){
-        cout << "Client execution. Test function = " << function << endl;
+        cout << "Client execution. Test function = " << function_choice << endl;
         server = new Peer(address, port);
         peer = server;
         init_byte = peer->bytesSent;
         rounds = peer->rounds;
     }
     else{
-        cout << "Server execution, Test function = " << function<< endl;
+        cout << "Server execution, Test function = " << function_choice << endl;
         client = waitForPeer(port);
         peer = client;
         init_byte = peer->bytesSent;
@@ -113,7 +113,7 @@ int main(int argc, char **argv){
 
     start = std::chrono::high_resolution_clock::now();
     std::cout << "============Offline start========="<<std::endl;
-    switch (function) {
+    switch (function_choice) {
         case MODULAR:{
             key.key1 = modular_offline(party, GroupElement(MODULAR_N, Bin), Bout);
             break;
@@ -157,7 +157,7 @@ int main(int argc, char **argv){
     mid_byte = peer->bytesSent;
     mid_rounds = peer->rounds;
     std::cout << "============Online start========="<<std::endl;
-    switch (function) {
+    switch (function_choice) {
         case MODULAR:{
             modular(party, x, MODULAR_N, key.key1);
             break;

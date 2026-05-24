@@ -26,7 +26,7 @@ SOFTWARE.
 #include "group_element.h"
 #include "comms.h"
 #include "api_varied.h"
-#include "deps/cryptoTools/cryptoTools/Common/Defines.h"
+#include <cryptoTools/Common/Defines.h>
 #include <assert.h>
 #include <cassert>
 
@@ -165,4 +165,3 @@ inline void assert_failed(const char* file, int line, const char* function, cons
 }
 
 #define always_assert(expr) (static_cast <bool> (expr) ? void (0) : assert_failed (__FILE__, __LINE__, __PRETTY_FUNCTION__, #expr))
-

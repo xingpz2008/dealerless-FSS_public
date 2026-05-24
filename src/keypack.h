@@ -433,14 +433,36 @@ inline void freePrivateLutKey(struct PrivateLutKey key){
 struct SplinePolyApproxKeyPack{
     int Bin, Bout;
     int degNum, segNum;
+    int fixed_scale;
     GroupElement* coefficientList;
     GroupElement random_mask;
     TRKeyPack TRKey;
+    ComparisonKeyPack* EvalSignKeyList;
+    ComparisonKeyPack* EvalExtendKeyList;
+    TRKeyPack* EvalScaleTRKeyList;
+    GroupElement* EvalAList;
+    GroupElement* EvalBList;
+    GroupElement* EvalCList;
     PrivateLutKey* PriLUTKeyList;
 };
 
 inline void freeSplinePolyApproxKeyPack(SplinePolyApproxKeyPack key){
     delete[] key.coefficientList;
+    if (key.EvalExtendKeyList != nullptr) {
+        delete[] key.EvalExtendKeyList;
+    }
+    if (key.fixed_scale > 0) {
+        if (key.EvalSignKeyList != nullptr) {
+            for (int i = 0; i < key.degNum; i++) {
+                freeComparisonKeyPack(key.EvalSignKeyList[i]);
+            }
+            delete[] key.EvalSignKeyList;
+        }
+        delete[] key.EvalScaleTRKeyList;
+        delete[] key.EvalAList;
+        delete[] key.EvalBList;
+        delete[] key.EvalCList;
+    }
     for (int i = 0; i < key.degNum + 1; i++){
         freePrivateLutKey(key.PriLUTKeyList[i]);
     }
@@ -451,9 +473,11 @@ struct SineKeyPack{
     bool using_lut;
     int digdec_new_bitsize, approx_segNum, approx_deg;
     ModularKeyPack ModKey;
+    ComparisonKeyPack ModExtendKey;
     ContainmentKeyPack CtnKey;
     DigDecKeyPack DigDecKey;
     DPFKeyPack* EvalAllKeyList;
+    TRKeyPack* LUTProductTRKeyList;
     // This public LUT seems no need to be contained in the key?
     // GroupElement* LUT;
     SplinePolyApproxKeyPack SplineApproxKey; // TRKey included
@@ -510,6 +534,8 @@ struct ProximityKeyPack{
     GroupElement* Alist;
     GroupElement* Blist;
     GroupElement* Clist;
+    TRKeyPack* ProductTRKeyList;
+    ComparisonKeyPack* ProductExtendKeyList;
     // MT triples = 4
     // SineKey = 2
     // Cosine Key = 2

@@ -11,10 +11,10 @@
  * Change Log:
  * 2024-12-02 - Initial version of the authentication module
  */
-#include "../../src/group_element.h"
-#include "../../src/2pc_cleartext.h"
-#include "../../src/2pc_math.h"
-#include "../../src/utils.h"
+#include "group_element.h"
+#include "2pc_cleartext.h"
+#include "2pc_math.h"
+#include "utils.h"
 #include <cmath>
 #include <ctime>
 #define M_PI 3.14159265358979323846

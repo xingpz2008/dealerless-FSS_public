@@ -81,6 +81,8 @@ long double fxd2flt(GroupElement x, int scale, int inp_bitlen);
 
 int64_t getSignedValue(GroupElement x);
 
+int fixed_point_approx_eval_bits(int output_bits, int scale);
+
 void matmul_eval_helper(int dim1, int dim2, int dim3, GroupElement *A,
                             GroupElement *B, GroupElement *C, GroupElement *ka, GroupElement *kb, GroupElement *kc);
 
