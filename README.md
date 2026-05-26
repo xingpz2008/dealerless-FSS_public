@@ -28,13 +28,23 @@ the input bit length during FSS evaluation.
 - Updated the build flow to configure dealerless FSS against a local EzPC
   checkout through CMake.
 - Improved macOS build support for the SCI/FSS dependency stack.
+- Improved DPF/DCF high-bit stability by removing large stack temporaries,
+  reducing tree-buffer copies, and adding explicit guards for impractical
+  full-domain bit lengths.
+- Added thresholded PRG-only parallel expansion for DPF/iDPF and DCF key
+  generation, plus parallel full-domain DPF evaluation.
+- Replaced time-seeded randomness in dealerless offline paths with
+  `sysRandomSeed()`-backed PRNG draws.
+- Modernized keypack ownership and read-only online APIs to reduce manual
+  memory-management risks while preserving cheap key copies.
+- Added `2pc_test/SAFETY_TEST` and `scripts/run_safety_perf.sh` for
+  high-depth safety and performance stress checks.
 
 ## Contents
 This repository consists of the following parts:
 - __src__: Implementations for the 2PC FSS scheme and case-study helpers.
 - __2pc_test__: Example programs, performance drivers, and correctness checks.
 - __scripts__: Build and validation helpers for a local checkout.
-- __docs__: Development notes and correctness records.
 
 ## Installation
 The implementation builds against a local [EzPC](https://github.com/mpc-msri/EzPC)
@@ -113,6 +123,24 @@ scripts/run_correctness.sh --case 12       # trigonometric functions
 scripts/run_correctness.sh --case 5        # truncation
 scripts/run_correctness.sh --build-dir /tmp/dealerless-fss-build
 scripts/run_correctness.sh --skip-build    # reuse an existing build
+```
+
+### Safety and Performance Stress Check
+
+Run the safety/performance helper from the repository root:
+
+```bash
+scripts/run_safety_perf.sh
+```
+
+The helper builds and runs `SAFETY_PERF_TEST`, which checks high-depth DPF and
+DCF generation/evaluation, DPF full-domain evaluation, and batched DCF
+evaluation while reporting timing totals. Useful options:
+
+```bash
+scripts/run_safety_perf.sh --bits 19 --repeat 5
+scripts/run_safety_perf.sh --dcf-batch 512 --eval-all-bits 14
+scripts/run_safety_perf.sh --skip-configure --skip-build
 ```
 
 ## Usage

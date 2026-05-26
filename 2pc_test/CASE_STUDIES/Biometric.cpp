@@ -59,7 +59,6 @@ int main(int argc, char **argv){
     amap.arg("r", party, "Role of party: ALICE = 2; BOB = 3");
     amap.parse(argc, argv);
 
-    srand((unsigned)time(NULL));
     float resolution = (float)1 / (1 << scale);
     float value = (float)left_pt;
     int test_num = (int)((right_pt - left_pt) / resolution);

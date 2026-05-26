@@ -27,25 +27,21 @@
 using namespace osuCrypto;
 
 [[deprecated("Legacy incorrect iDCF path: do not use for correctness-sensitive code.")]]
-iDCFKeyPack keyGeniDCF(int party_id, int Bin, int Bout, GroupElement idx, GroupElement* payload, bool masked = true)
-__attribute__((optimize("O0")));
+iDCFKeyPack keyGeniDCF(int party_id, int Bin, int Bout, GroupElement idx, GroupElement* payload, bool masked = true);
 
-newDCFKeyPack keyGenNewDCF(int party_id, int Bin, int Bout, GroupElement idx, GroupElement payload)
-__attribute__((optimize("O0")));
+newDCFKeyPack keyGenNewDCF(int party_id, int Bin, int Bout, GroupElement idx, GroupElement payload);
 
 [[deprecated("Legacy incorrect iDCF path: do not use for correctness-sensitive code.")]]
 void evaliDCFNext(int party, uint64_t idx, block* st_s, u8* st_t, block* cw, u8* t_l, u8* t_r,
-                  const GroupElement W_cw, block* res_s, u8* res_t, GroupElement* y)
-                  __attribute__((optimize("O0")));
+                  const GroupElement W_cw, block* res_s, u8* res_t, GroupElement* y);
 
 [[deprecated("Legacy incorrect iDCF path: do not use for correctness-sensitive code.")]]
-void evaliDCF(int party, GroupElement *res, GroupElement idx, const iDCFKeyPack key, bool masked)
-                    __attribute__((optimize("O0")));
+void evaliDCF(int party, GroupElement *res, GroupElement idx, const iDCFKeyPack& key, bool masked);
 
 [[deprecated("Legacy incorrect iDCF path: do not use for correctness-sensitive code.")]]
-void evaliDCF(int party, GroupElement *res, GroupElement idx, const iDCFKeyPack key)__attribute__((optimize("O0")));
+void evaliDCF(int party, GroupElement *res, GroupElement idx, const iDCFKeyPack& key);
 
 [[deprecated("Legacy incorrect iDCF path: do not use for correctness-sensitive code.")]]
-void evaliDCF(int party, GroupElement* res, GroupElement* idx, iDCFKeyPack* keyList, int size, int max_bitsize)__attribute__((optimize("O0")));
+void evaliDCF(int party, GroupElement* res, GroupElement* idx, iDCFKeyPack* keyList, int size, int max_bitsize);
 
-void evalNewDCF(int party, GroupElement* res, GroupElement* idx, newDCFKeyPack* keyList, int size, int max_bitsize)__attribute__((optimize("O0")));
+void evalNewDCF(int party, GroupElement* res, GroupElement* idx, const newDCFKeyPack* keyList, int size, int max_bitsize);

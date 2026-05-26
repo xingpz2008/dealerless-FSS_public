@@ -674,9 +674,15 @@ void create_sub_lut(int function, int Bin, int Bout, int scale, int segNum, Grou
 }
 
 int randint_range(int n,int m){//产生n~m间的随机数（包括m和n）
-    double base=((double)rand())/RAND_MAX;
-    int res=n+(base*(double)(m-n+1));
-    return res;
+    assert(n <= m);
+    auto rng = secure_prng();
+    const uint64_t range = static_cast<uint64_t>(m) - static_cast<uint64_t>(n) + 1;
+    const uint64_t limit = ~uint64_t(0) - (~uint64_t(0) % range);
+    uint64_t draw = 0;
+    do {
+        draw = rng.get<uint64_t>();
+    } while (draw >= limit);
+    return n + static_cast<int>(draw % range);
 }
 
 float decode_from_ge_binary(GroupElement x, int bitlen, int scale){

@@ -21,9 +21,9 @@
 
 ComparisonKeyPack comparison_offline(int party_id, int Bin, int Bout, GroupElement c, GroupElement* payload, bool public_payload);
 
-void comparison(int party_id, GroupElement* res, GroupElement idx, ComparisonKeyPack key);
+void comparison(int party_id, GroupElement* res, GroupElement idx, const ComparisonKeyPack& key);
 
-void comparison(int party_id, GroupElement* res, GroupElement* idx, ComparisonKeyPack* KeyList,
+void comparison(int party_id, GroupElement* res, GroupElement* idx, const ComparisonKeyPack* KeyList,
                 int size, int max_bitsize);
 
 [[deprecated("Use ring_extend with an offline ComparisonKeyPack; zero_extend performs direct online MILL/B2A.")]]
@@ -32,40 +32,40 @@ GroupElement zero_extend(int party_id, GroupElement input, int output_bits);
 ComparisonKeyPack ring_extend_offline(int party_id, int input_bits, int output_bits);
 
 GroupElement ring_extend(int party_id, GroupElement input, int output_bits,
-                         ComparisonKeyPack key);
+                         const ComparisonKeyPack& key);
 
 ModularKeyPack modular_offline(int party_id, GroupElement N, int Bout);
 
-GroupElement modular(int party_id, GroupElement input, int N, ModularKeyPack key);
+GroupElement modular(int party_id, GroupElement input, int N, const ModularKeyPack& key);
 
 TRKeyPack truncate_and_reduce_offline(int party_id, int l, int s);
 
-GroupElement truncate_and_reduce(int party_id, GroupElement input, int s, TRKeyPack key);
+GroupElement truncate_and_reduce(int party_id, GroupElement input, int s, const TRKeyPack& key);
 
 ContainmentKeyPack containment_offline(int party_id, int Bout, GroupElement* knots_list, int knots_size);
 
 ContainmentKeyPack containment_offline_public(int party_id, int Bout, GroupElement* knots_list, int knots_size);
 
-void containment(int party_id, GroupElement input, GroupElement* output, int knots_size, ContainmentKeyPack key);
+void containment(int party_id, GroupElement input, GroupElement* output, int knots_size, const ContainmentKeyPack& key);
 
 DigDecKeyPack digdec_offline(int party_id, int Bin, int NewBitSize);
 
-void digdec(int party_id, GroupElement input, GroupElement* output, int NewBitSize, DigDecKeyPack key);
+void digdec(int party_id, GroupElement input, GroupElement* output, int NewBitSize, const DigDecKeyPack& key);
 
 DPFKeyPack pub_lut_offline(int party_id, int idx_bitlen, int lut_bitlen);
 
 GroupElement pub_lut(int party_id, GroupElement input, GroupElement* table, GroupElement* shifted_full_domain_res,
-                 int table_size, int output_bitlen, DPFKeyPack key);
+                 int table_size, int output_bitlen, const DPFKeyPack& key);
 
 PrivateLutKey pri_lut_offline(int party_id, int idx_bitlen, int lut_bitlen, GroupElement* priList);
 
-GroupElement pri_lut(int party_id, GroupElement idx, PrivateLutKey key);
+GroupElement pri_lut(int party_id, GroupElement idx, const PrivateLutKey& key);
 
 SplinePolyApproxKeyPack spline_poly_approx_offline(int party_id, int Bin, int Bout,
                                                    GroupElement* publicCoefficientList, int degree,
                                                    int segNum, int fixed_scale = 0);
 
-GroupElement spline_poly_approx(int party_id, GroupElement input, SplinePolyApproxKeyPack key);
+GroupElement spline_poly_approx(int party_id, GroupElement input, const SplinePolyApproxKeyPack& key);
 
 [[deprecated("Legacy performance baseline only: fixed-point masked Approx is not correctness-safe.")]]
 SplinePolyApproxKeyPack spline_poly_approx_offline_legacy_no_online_beaver(
@@ -74,4 +74,4 @@ SplinePolyApproxKeyPack spline_poly_approx_offline_legacy_no_online_beaver(
 
 [[deprecated("Legacy performance baseline only: fixed-point masked Approx is not correctness-safe.")]]
 GroupElement spline_poly_approx_legacy_no_online_beaver(
-    int party_id, GroupElement input, SplinePolyApproxKeyPack key);
+    int party_id, GroupElement input, const SplinePolyApproxKeyPack& key);

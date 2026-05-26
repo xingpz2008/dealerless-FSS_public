@@ -513,7 +513,7 @@ void Peer::send_conv2d_key(const Conv2DKey &k) {
         }
     }
 
-    GroupElement *c = k.c;
+    const GroupElement *c = k.c;
     int Bout = k.Bout;
     for(int i = 0; i < d0; ++i) {
         for(int j = 0; j < d1; ++j) {

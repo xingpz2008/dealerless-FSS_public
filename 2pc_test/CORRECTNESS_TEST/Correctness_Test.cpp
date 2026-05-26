@@ -54,11 +54,8 @@ GroupElement split_share(uint64_t value, int bitsize, uint64_t server_share) {
     return GroupElement(value - server_share, bitsize);
 }
 
-void free_dpf_key(DPFKeyPack key) {
-    delete[] key.k;
-    delete[] key.g;
-    delete[] key.v;
-    delete key.random_mask;
+void free_dpf_key(DPFKeyPack& key) {
+    freeDPFKeyPack(key);
 }
 
 class ResultLog {

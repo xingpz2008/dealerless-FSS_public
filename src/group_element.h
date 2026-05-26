@@ -32,6 +32,11 @@ extern int32_t bitlength;
 extern osuCrypto::PRNG prng;
 extern osuCrypto::PRNG prngShared;
 
+inline osuCrypto::PRNG secure_prng()
+{
+    return osuCrypto::PRNG(osuCrypto::sysRandomSeed());
+}
+
 struct GroupElement {
     int bitsize = bitlength;
     uint64_t value;
@@ -58,10 +63,10 @@ struct GroupElement {
         this->bitsize = other.bitsize;
     }
 
-    uint8_t operator[](int index)
+    uint8_t operator[](int index) const
     {
         // a[0] gives msb, a[bitsize-1] gives lsb
-        return (uint8_t)(value >> (bitsize - 1 - index)) & 1;
+        return static_cast<uint8_t>((value >> (bitsize - 1 - index)) & 1);
     }
 };
 
@@ -69,6 +74,15 @@ inline void mod(GroupElement &a)
 {
     if (a.bitsize != 64)
         a.value = a.value & ((uint64_t(1) << a.bitsize) - 1); 
+}
+
+inline GroupElement random_ge_from_prng(osuCrypto::PRNG &rng, int bitlength)
+{
+    GroupElement a;
+    a.bitsize = bitlength;
+    a.value = rng.get<uint64_t>();
+    mod(a);
+    return a;
 }
 
 inline GroupElement operator+(const GroupElement& a, const GroupElement& b)
@@ -218,11 +232,11 @@ inline bool operator>=(const GroupElement &a, const GroupElement &b)
 
 inline std::pair<GroupElement, GroupElement> splitShare(const GroupElement& a)
 {
+    auto rng = secure_prng();
     GroupElement a1, a2;
     a1.bitsize = a.bitsize;
     a2.bitsize = a.bitsize;
-    a1.value = rand() % (1 << a.bitsize);
-    // a1.value = 0;
+    a1.value = rng.get<uint64_t>();
     mod(a1);
     a2.value = (a.value - a1.value);
     mod(a2);
@@ -269,11 +283,8 @@ inline GroupElement pow(GroupElement x, uint64_t e)
 
 inline GroupElement random_ge(int bitlength)
 {
-    GroupElement a;
-    a.bitsize = bitlength;
-    a.value = prng.get<uint64_t>();
-    mod(a);
-    return a;
+    auto rng = secure_prng();
+    return random_ge_from_prng(rng, bitlength);
 }
 
 inline std::istream &operator>>(std::istream &is, GroupElement &a) {

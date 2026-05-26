@@ -20,14 +20,87 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-Note: Part of freeKey functions are to be completed.
+Note: Key packs use shared array ownership for protocol key material. This
+preserves the historical cheap-copy behavior while avoiding public owning raw
+pointers and double-free-prone manual ownership.
 */
 #pragma once
 
+#include <array>
+#include <cstddef>
 #include <cryptoTools/Common/Defines.h>
+#include <memory>
 #include "group_element.h"
 
 using namespace osuCrypto;
+
+template <typename T>
+class KeyArray {
+public:
+    KeyArray() = default;
+    explicit KeyArray(T* ptr) : ptr_(ptr, std::default_delete<T[]>()) {}
+
+    KeyArray& operator=(T* ptr) {
+        reset(ptr);
+        return *this;
+    }
+
+    void reset(T* ptr = nullptr) {
+        if (ptr == nullptr) {
+            ptr_.reset();
+        } else {
+            ptr_.reset(ptr, std::default_delete<T[]>());
+        }
+    }
+
+    T* data() noexcept {
+        return ptr_.get();
+    }
+
+    const T* data() const noexcept {
+        return ptr_.get();
+    }
+
+    T* get() noexcept {
+        return data();
+    }
+
+    const T* get() const noexcept {
+        return data();
+    }
+
+    T& operator[](std::size_t index) {
+        return ptr_.get()[index];
+    }
+
+    const T& operator[](std::size_t index) const {
+        return ptr_.get()[index];
+    }
+
+    explicit operator bool() const noexcept {
+        return static_cast<bool>(ptr_);
+    }
+
+    operator T*() const noexcept {
+        return ptr_.get();
+    }
+
+    bool operator==(std::nullptr_t) const noexcept {
+        return ptr_ == nullptr;
+    }
+
+    bool operator!=(std::nullptr_t) const noexcept {
+        return ptr_ != nullptr;
+    }
+
+private:
+    std::shared_ptr<T[]> ptr_;
+};
+
+template <typename T>
+inline void resetKeyArray(KeyArray<T>& array) {
+    array.reset();
+}
 
 struct MultKey{
     int Bin, Bout;
@@ -43,105 +116,122 @@ struct DCFKeyPack{
      * Group size was set by default to 1, maybe used in multiprocess?
      *
     */
-    int Bin, Bout, groupSize;
-    block *k;   // size Bin+1
-    GroupElement *g;    // bitsize Bout, size groupSize
-    GroupElement *v;   // bitsize Bout, size Bin x groupSize
+    int Bin = 0, Bout = 0, groupSize = 0;
+    KeyArray<block> k;   // size Bin+1
+    KeyArray<GroupElement> g;    // bitsize Bout, size groupSize
+    KeyArray<GroupElement> v;   // bitsize Bout, size Bin x groupSize
     DCFKeyPack(int Bin, int Bout, int groupSize,
                 block *k,
                 GroupElement *g,
                 GroupElement *v) : Bin(Bin), Bout(Bout), groupSize(groupSize), k(k), g(g), v(v){}
-    DCFKeyPack() {}
+    DCFKeyPack() = default;
 };
 
 struct DPFKeyPack{
-    int Bin, Bout, groupSize;
-    block* k;
-    GroupElement* g;
-    u8* v;
-    GroupElement* random_mask;
+    int Bin = 0, Bout = 0, groupSize = 0;
+    KeyArray<block> k;
+    KeyArray<GroupElement> g;
+    KeyArray<u8> v;
+    std::shared_ptr<GroupElement> random_mask;
     DPFKeyPack(int Bin, int Bout, int groupSize,
                block* k, GroupElement* g, u8* v, GroupElement* random_mask): Bin(Bin), Bout(Bout), groupSize(groupSize), k(k), g(g), v(v), random_mask(random_mask){}
-    DPFKeyPack() {}
+    DPFKeyPack() = default;
 };
 
+inline void resetDPFKeyPack(DPFKeyPack &key){
+    key.k.reset();
+    key.g.reset();
+    key.v.reset();
+    key.random_mask.reset();
+    key = DPFKeyPack();
+}
+
+inline void freeDPFKeyPack(DPFKeyPack &key){
+    resetDPFKeyPack(key);
+}
+
 struct iDCFKeyPack{
-    int Bin, Bout, groupSize;
-    block* k;
-    u8* v;
-    GroupElement* beta_0;
-    GroupElement* g;
-    GroupElement* random_mask;
-    GroupElement* a;
-    GroupElement* b;
-    GroupElement* c;
+    int Bin = 0, Bout = 0, groupSize = 0;
+    KeyArray<block> k;
+    KeyArray<u8> v;
+    KeyArray<GroupElement> beta_0;
+    KeyArray<GroupElement> g;
+    std::shared_ptr<GroupElement> random_mask;
+    KeyArray<GroupElement> a;
+    KeyArray<GroupElement> b;
+    KeyArray<GroupElement> c;
     iDCFKeyPack(int Bin, int Bout, int groupSize,
                 block* k, GroupElement* g, u8* v, GroupElement* beta_0, GroupElement* random_mask, GroupElement* a, GroupElement* b, GroupElement* c): Bin(Bin), Bout(Bout), groupSize(groupSize),
                 k(k), g(g), v(v), beta_0(beta_0), random_mask(random_mask), a(a), b(b), c(c) {}
-    iDCFKeyPack() {}
+    iDCFKeyPack() = default;
 };
 
 struct newDCFKeyPack{
-    int Bin, Bout;
-    block* k;
-    GroupElement* g;
-    u8* v;
+    int Bin = 0, Bout = 0;
+    KeyArray<block> k;
+    KeyArray<GroupElement> g;
+    KeyArray<u8> v;
     newDCFKeyPack(int Bin, int Bout, block* k, GroupElement* g, u8* v): Bin(Bin), Bout(Bout), k(k), g(g), v(v) {}
-    newDCFKeyPack() {}
+    newDCFKeyPack() = default;
 };
 
-inline void freeNewDCFKeyPack(newDCFKeyPack key){
-    delete[] key.k;
-    delete[] key.g;
-    delete[] key.v;
+inline void resetNewDCFKeyPack(newDCFKeyPack &key){
+    key.k.reset();
+    key.g.reset();
+    key.v.reset();
+    key = newDCFKeyPack();
+}
+
+inline void freeNewDCFKeyPack(newDCFKeyPack &key){
+    resetNewDCFKeyPack(key);
 }
 
 struct ComparisonKeyPack{
-    int Bin, Bout;
+    int Bin = 0, Bout = 0;
     GroupElement mask;
     GroupElement correction;
-    newDCFKeyPack* DCFKeyList;
+    std::array<newDCFKeyPack, 2> DCFKeyList;
     // first is key with r
     // second is key with r+alpha
 };
 
-inline void freeComparisonKeyPack(ComparisonKeyPack key){
-    freeNewDCFKeyPack(key.DCFKeyList[0]);
-    freeNewDCFKeyPack(key.DCFKeyList[1]);
+inline void resetComparisonKeyPack(ComparisonKeyPack &key){
+    resetNewDCFKeyPack(key.DCFKeyList[0]);
+    resetNewDCFKeyPack(key.DCFKeyList[1]);
+    key = ComparisonKeyPack();
+}
+
+inline void freeComparisonKeyPack(ComparisonKeyPack &key){
+    resetComparisonKeyPack(key);
 }
 
 inline void freeDCFKeyPack(DCFKeyPack &key){
-    delete[] key.k;
-    delete[] key.g;
-    delete[] key.v;
+    key.k.reset();
+    key.g.reset();
+    key.v.reset();
+    key = DCFKeyPack();
 }
 
 inline void freeDCFKeyPackPair(std::pair<DCFKeyPack, DCFKeyPack> &keys){
-    delete[] keys.first.k;
-    delete[] keys.second.k;
-    delete[] keys.first.g;
-    delete[] keys.first.v;
+    freeDCFKeyPack(keys.first);
+    freeDCFKeyPack(keys.second);
 }
 
 struct DualDCFKeyPack{  
     int Bin, Bout, groupSize;
     DCFKeyPack dcfKey;
-    GroupElement *sb;   // size: groupSize
+    KeyArray<GroupElement> sb;   // size: groupSize
     DualDCFKeyPack() {}
 };
 
 inline void freeDualDCFKeyPack(DualDCFKeyPack &key){
     freeDCFKeyPack(key.dcfKey);
-    delete[] key.sb;
+    key.sb.reset();
 }
 
 inline void freeDualDCFKeyPackPair(std::pair<DualDCFKeyPack, DualDCFKeyPack> &keys){
-    delete[] keys.first.dcfKey.k;
-    delete[] keys.second.dcfKey.k;
-    delete[] keys.first.dcfKey.g;
-    delete[] keys.first.dcfKey.v;
-    delete[] keys.first.sb;
-    delete[] keys.second.sb;
+    freeDualDCFKeyPack(keys.first);
+    freeDualDCFKeyPack(keys.second);
 }
 
 struct AddKey{
@@ -153,22 +243,18 @@ struct AddKey{
 struct MatMulKey{
     int Bin, Bout;
     int s1, s2, s3;
-    GroupElement *a, *b, *c;    
+    KeyArray<GroupElement> a, b, c;
 };
 
 inline void freeMatMulKey(MatMulKey &key){
-    delete[] key.a;
-    delete[] key.b;
-    delete[] key.c;
+    key.a.reset();
+    key.b.reset();
+    key.c.reset();
 }
 
 inline void freeMatMulKeyPair(std::pair<MatMulKey, MatMulKey> &keys){
-    delete[] keys.first.a;
-    delete[] keys.first.b;
-    delete[] keys.first.c;
-    delete[] keys.second.a;
-    delete[] keys.second.b;
-    delete[] keys.second.c;
+    freeMatMulKey(keys.first);
+    freeMatMulKey(keys.second);
 }
 
 struct MultKeyNew {
@@ -182,13 +268,13 @@ struct Conv2DKey{
         zPadHLeft, zPadHRight, 
         zPadWLeft, zPadWRight,
         strideH, strideW;
-    GroupElement *a, *b, *c;    
+    KeyArray<GroupElement> a, b, c;
 };
 
 inline void freeConv2dKey(Conv2DKey &key){
-    delete[] key.a;
-    delete[] key.b;
-    delete[] key.c;
+    key.a.reset();
+    key.b.reset();
+    key.c.reset();
 }
 
 struct ScmpKeyPack
@@ -227,8 +313,8 @@ struct SignedPublicDivKeyPack
 struct ReluKeyPack
 {
     int Bin, Bout;
-    block *k;
-    GroupElement *g, *v;
+    KeyArray<block> k;
+    KeyArray<GroupElement> g, v;
     GroupElement e_b0, e_b1;		 // size: degree+1 (same as beta)
     GroupElement beta_b0, beta_b1;	 // size: degree+1 (shares of beta, which is set of poly coeffs) (beta: highest to lowest power left to right)
     GroupElement r_b;
@@ -237,18 +323,15 @@ struct ReluKeyPack
 
 inline void freeReluKeyPack(ReluKeyPack &key)
 {
-    delete[] key.k;
-    delete[] key.g;
-    delete[] key.v;
+    key.k.reset();
+    key.g.reset();
+    key.v.reset();
 }
 
 inline void freeReluKeyPackPair(std::pair<ReluKeyPack,ReluKeyPack> &keys)
 {
-    delete[] keys.first.k;
-    delete[] keys.second.k;
-    delete[] keys.first.g;
-    delete[] keys.first.v;
-    // other key shares g and v, dont delete again
+    freeReluKeyPack(keys.first);
+    freeReluKeyPack(keys.second);
 }
 
 struct MaxpoolKeyPack
@@ -265,10 +348,8 @@ inline void freeMaxpoolKeyPack(MaxpoolKeyPack &key)
 
 inline void freeMaxpoolKeyPackPair(std::pair<MaxpoolKeyPack,MaxpoolKeyPack> &keys)
 {
-    delete[] keys.first.reluKey.k;
-    delete[] keys.second.reluKey.k;
-    delete[] keys.first.reluKey.g;
-    delete[] keys.first.reluKey.v;
+    freeMaxpoolKeyPack(keys.first);
+    freeMaxpoolKeyPack(keys.second);
 }
 
 struct ARSKeyPack
@@ -283,30 +364,15 @@ struct ARSKeyPack
 
 inline void freeARSKeyPack(ARSKeyPack &key)
 {
-    delete[] key.dcfKey.k;
-    delete[] key.dcfKey.g;
-    delete[] key.dcfKey.v;
+    freeDCFKeyPack(key.dcfKey);
     if (key.Bout > key.Bin - key.shift) {
-        delete[] key.dualDcfKey.sb;
-        delete[] key.dualDcfKey.dcfKey.k;
-        delete[] key.dualDcfKey.dcfKey.g;
-        delete[] key.dualDcfKey.dcfKey.v;
+        freeDualDCFKeyPack(key.dualDcfKey);
     }
 }
 inline void freeARSKeyPackPair(std::pair<ARSKeyPack, ARSKeyPack> &keys)
 {
-    delete[] keys.first.dcfKey.k;
-    delete[] keys.second.dcfKey.k;
-    delete[] keys.first.dcfKey.g;
-    delete[] keys.first.dcfKey.v;
-    if (keys.first.Bout > keys.first.Bin - keys.first.shift) {
-        delete[] keys.first.dualDcfKey.sb;
-        delete[] keys.second.dualDcfKey.sb;
-        delete[] keys.first.dualDcfKey.dcfKey.k;
-        delete[] keys.second.dualDcfKey.dcfKey.k;
-        delete[] keys.first.dualDcfKey.dcfKey.g;
-        delete[] keys.first.dualDcfKey.dcfKey.v;
-    }
+    freeARSKeyPack(keys.first);
+    freeARSKeyPack(keys.second);
 }
 /*
 struct SplineOneKeyPack
@@ -341,10 +407,8 @@ inline void freeSplineKey(SplineKeyPack &key)
 
 inline void freeSplineKeyPair(std::pair<SplineKeyPack, SplineKeyPack> &keys)
 {
-    delete[] keys.first.dcfKey.k;
-    delete[] keys.second.dcfKey.k;
-    delete[] keys.first.dcfKey.g;
-    delete[] keys.first.dcfKey.v;
+    freeDCFKeyPack(keys.first.dcfKey);
+    freeDCFKeyPack(keys.second.dcfKey);
     keys.first.p.clear();
     keys.second.p.clear();
     keys.first.e_b.clear();
@@ -359,7 +423,7 @@ struct ModularKeyPack{
     ComparisonKeyPack ComparisonKey;
 };
 
-inline void freeModularKeyPack(ModularKeyPack key){
+inline void freeModularKeyPack(ModularKeyPack& key){
     freeComparisonKeyPack(key.ComparisonKey);
 }
 
@@ -369,103 +433,102 @@ struct TRKeyPack{
     ComparisonKeyPack ComparisonKey;
 };
 
-inline void freeTRKeyPack(TRKeyPack key){
+inline void freeTRKeyPack(TRKeyPack& key){
     freeComparisonKeyPack(key.ComparisonKey);
 }
 
 struct ContainmentKeyPack{
     int Bin, Bout;
     int CtnNum;
-    GroupElement* AList;
-    GroupElement* BList;
-    GroupElement* CList;
-    ComparisonKeyPack* ComparisonKeyList;
+    KeyArray<GroupElement> AList;
+    KeyArray<GroupElement> BList;
+    KeyArray<GroupElement> CList;
+    KeyArray<ComparisonKeyPack> ComparisonKeyList;
 };
 
-inline void freeContainmentKeyPack(ContainmentKeyPack key){
-    delete[] key.AList;
-    delete[] key.BList;
-    delete[] key.CList;
+inline void freeContainmentKeyPack(ContainmentKeyPack& key){
+    key.AList.reset();
+    key.BList.reset();
+    key.CList.reset();
     for (int i = 0; i < key.CtnNum; i++){
         freeComparisonKeyPack(key.ComparisonKeyList[i]);
     }
+    key.ComparisonKeyList.reset();
 }
 
 struct DigDecKeyPack{
     int Bin, Bout;
     int SegNum;
     int NewBitSize;
-    ComparisonKeyPack* ComparisonKeyList;
-    DPFKeyPack* DPFKeyList;
-    GroupElement* AList;
-    GroupElement* BList;
-    GroupElement* CList;
+    KeyArray<ComparisonKeyPack> ComparisonKeyList;
+    KeyArray<DPFKeyPack> DPFKeyList;
+    KeyArray<GroupElement> AList;
+    KeyArray<GroupElement> BList;
+    KeyArray<GroupElement> CList;
 };
 
-inline void freeDigDecKeyPack(DigDecKeyPack key){
-    delete[] key.AList;
-    delete[] key.BList;
-    delete[] key.CList;
+inline void freeDigDecKeyPack(DigDecKeyPack& key){
+    key.AList.reset();
+    key.BList.reset();
+    key.CList.reset();
     for (int i = 0; i < key.SegNum - 1; i++){
         freeComparisonKeyPack(key.ComparisonKeyList[i]);
-        delete[] key.DPFKeyList[i].k;
-        delete[] key.DPFKeyList[i].g;
-        delete[] key.DPFKeyList[i].v;
-        delete[] key.DPFKeyList[i].random_mask;
+        freeDPFKeyPack(key.DPFKeyList[i]);
     }
+    key.ComparisonKeyList.reset();
+    key.DPFKeyList.reset();
 }
 
 struct PrivateLutKey{
     int entryNum, lut_bitlen;
     GroupElement random_mask;
-    DPFKeyPack* DPFKeyList;
+    KeyArray<DPFKeyPack> DPFKeyList;
 };
 
-inline void freePrivateLutKey(struct PrivateLutKey key){
+inline void freePrivateLutKey(struct PrivateLutKey& key){
     for (int i = 0; i < key.entryNum; i++){
-        delete[] key.DPFKeyList[i].k;
-        delete[] key.DPFKeyList[i].g;
-        delete[] key.DPFKeyList[i].v;
-        delete[] key.DPFKeyList[i].random_mask;
+        freeDPFKeyPack(key.DPFKeyList[i]);
     }
+    key.DPFKeyList.reset();
 }
 
 struct SplinePolyApproxKeyPack{
     int Bin, Bout;
     int degNum, segNum;
     int fixed_scale;
-    GroupElement* coefficientList;
+    KeyArray<GroupElement> coefficientList;
     GroupElement random_mask;
     TRKeyPack TRKey;
-    ComparisonKeyPack* EvalSignKeyList;
-    ComparisonKeyPack* EvalExtendKeyList;
-    TRKeyPack* EvalScaleTRKeyList;
-    GroupElement* EvalAList;
-    GroupElement* EvalBList;
-    GroupElement* EvalCList;
-    PrivateLutKey* PriLUTKeyList;
+    KeyArray<ComparisonKeyPack> EvalSignKeyList;
+    KeyArray<ComparisonKeyPack> EvalExtendKeyList;
+    KeyArray<TRKeyPack> EvalScaleTRKeyList;
+    KeyArray<GroupElement> EvalAList;
+    KeyArray<GroupElement> EvalBList;
+    KeyArray<GroupElement> EvalCList;
+    KeyArray<PrivateLutKey> PriLUTKeyList;
 };
 
-inline void freeSplinePolyApproxKeyPack(SplinePolyApproxKeyPack key){
-    delete[] key.coefficientList;
+inline void freeSplinePolyApproxKeyPack(SplinePolyApproxKeyPack& key){
+    key.coefficientList.reset();
     if (key.EvalExtendKeyList != nullptr) {
-        delete[] key.EvalExtendKeyList;
+        key.EvalExtendKeyList.reset();
     }
     if (key.fixed_scale > 0) {
         if (key.EvalSignKeyList != nullptr) {
             for (int i = 0; i < key.degNum; i++) {
                 freeComparisonKeyPack(key.EvalSignKeyList[i]);
             }
-            delete[] key.EvalSignKeyList;
+            key.EvalSignKeyList.reset();
         }
-        delete[] key.EvalScaleTRKeyList;
-        delete[] key.EvalAList;
-        delete[] key.EvalBList;
-        delete[] key.EvalCList;
+        key.EvalScaleTRKeyList.reset();
+        key.EvalAList.reset();
+        key.EvalBList.reset();
+        key.EvalCList.reset();
     }
     for (int i = 0; i < key.degNum + 1; i++){
         freePrivateLutKey(key.PriLUTKeyList[i]);
     }
+    key.PriLUTKeyList.reset();
 }
 
 struct SineKeyPack{
@@ -476,45 +539,64 @@ struct SineKeyPack{
     ComparisonKeyPack ModExtendKey;
     ContainmentKeyPack CtnKey;
     DigDecKeyPack DigDecKey;
-    DPFKeyPack* EvalAllKeyList;
-    TRKeyPack* LUTProductTRKeyList;
+    KeyArray<DPFKeyPack> EvalAllKeyList;
+    KeyArray<TRKeyPack> LUTProductTRKeyList;
     // This public LUT seems no need to be contained in the key?
     // GroupElement* LUT;
     SplinePolyApproxKeyPack SplineApproxKey; // TRKey included
     // Maybe Multiplication MTs?
     int MTList_len;
-    GroupElement* AList;
-    GroupElement* BList;
-    GroupElement* CList;
+    KeyArray<GroupElement> AList;
+    KeyArray<GroupElement> BList;
+    KeyArray<GroupElement> CList;
 };
 
-inline void freeSineKeyPack(SineKeyPack Key){
+inline void freeSineKeyPack(SineKeyPack& Key){
     freeModularKeyPack(Key.ModKey);
-    //freeContainmentKeyPack(Key.CtnKey);
-    //freeDigDecKeyPack(Key.DigDecKey);
-    delete[] Key.EvalAllKeyList;
-    //freeSplinePolyApproxKeyPack(Key.SplineApproxKey);
-    delete[] Key.AList;
-    delete[] Key.BList;
-    delete[] Key.CList;
+    freeComparisonKeyPack(Key.ModExtendKey);
+    freeContainmentKeyPack(Key.CtnKey);
+    if (Key.using_lut) {
+        freeDigDecKeyPack(Key.DigDecKey);
+        const int digdec_segNum =
+            (Key.scale - 1) / Key.digdec_new_bitsize +
+            (((Key.scale - 1) % Key.digdec_new_bitsize == 0) ? 0 : 1);
+        for (int i = 0; i < digdec_segNum; i++) {
+            freeDPFKeyPack(Key.EvalAllKeyList[i]);
+        }
+        Key.EvalAllKeyList.reset();
+        for (int i = 0; i < 2; i++) {
+            freeTRKeyPack(Key.LUTProductTRKeyList[i]);
+        }
+        Key.LUTProductTRKeyList.reset();
+    } else {
+        freeSplinePolyApproxKeyPack(Key.SplineApproxKey);
+    }
+    Key.AList.reset();
+    Key.BList.reset();
+    Key.CList.reset();
 }
 
 typedef SineKeyPack CosineKeyPack;
 
-inline void freeCosineKeyPack(CosineKeyPack Key){
+inline void freeCosineKeyPack(CosineKeyPack& Key){
     freeSineKeyPack(Key);
 }
 
 typedef SineKeyPack TangentKeyPack;
 
-inline void freeTangentKeyPack(TangentKeyPack Key){
+inline void freeTangentKeyPack(TangentKeyPack& Key){
     freeModularKeyPack(Key.ModKey);
-    //freeContainmentKeyPack(Key.CtnKey);
-    delete[] Key.EvalAllKeyList;
-    //freeSplinePolyApproxKeyPack(Key.SplineApproxKey);
-    delete[] Key.AList;
-    delete[] Key.BList;
-    delete[] Key.CList;
+    freeComparisonKeyPack(Key.ModExtendKey);
+    freeContainmentKeyPack(Key.CtnKey);
+    if (Key.using_lut) {
+        freeDPFKeyPack(Key.EvalAllKeyList[0]);
+        Key.EvalAllKeyList.reset();
+    } else {
+        freeSplinePolyApproxKeyPack(Key.SplineApproxKey);
+    }
+    Key.AList.reset();
+    Key.BList.reset();
+    Key.CList.reset();
 }
 
 struct TestKeyPack{
@@ -529,28 +611,47 @@ struct TestKeyPack{
 
 struct ProximityKeyPack{
     int Bin, Bout, scale;
-    SineKeyPack* SineKeyList;
-    CosineKeyPack* CosineKeyList;
-    GroupElement* Alist;
-    GroupElement* Blist;
-    GroupElement* Clist;
-    TRKeyPack* ProductTRKeyList;
-    ComparisonKeyPack* ProductExtendKeyList;
+    KeyArray<SineKeyPack> SineKeyList;
+    KeyArray<CosineKeyPack> CosineKeyList;
+    KeyArray<GroupElement> Alist;
+    KeyArray<GroupElement> Blist;
+    KeyArray<GroupElement> Clist;
+    KeyArray<TRKeyPack> ProductTRKeyList;
+    KeyArray<ComparisonKeyPack> ProductExtendKeyList;
     // MT triples = 4
     // SineKey = 2
     // Cosine Key = 2
 };
 
-inline void freeProximityKeyPack(ProximityKeyPack key){
-    // TODO: Implement this.
+inline void freeProximityKeyPack(ProximityKeyPack& key){
+    for (int i = 0; i < 2; i++) {
+        freeSineKeyPack(key.SineKeyList[i]);
+        freeCosineKeyPack(key.CosineKeyList[i]);
+    }
+    key.SineKeyList.reset();
+    key.CosineKeyList.reset();
+    key.Alist.reset();
+    key.Blist.reset();
+    key.Clist.reset();
+    for (int i = 0; i < 4; i++) {
+        freeTRKeyPack(key.ProductTRKeyList[i]);
+    }
+    key.ProductTRKeyList.reset();
+    for (int i = 0; i < 6; i++) {
+        freeComparisonKeyPack(key.ProductExtendKeyList[i]);
+    }
+    key.ProductExtendKeyList.reset();
 };
 
 struct BiometricKeyPack{
     int Bin, Bout, scale;
     bool using_lut;
-    TangentKeyPack* TangentKeyList;
+    KeyArray<TangentKeyPack> TangentKeyList;
 };
 
-inline void freeBiometricKeyPack(BiometricKeyPack key){
-    // TODO: Implement this.
+inline void freeBiometricKeyPack(BiometricKeyPack& key){
+    for (int i = 0; i < 4; i++) {
+        freeTangentKeyPack(key.TangentKeyList[i]);
+    }
+    key.TangentKeyList.reset();
 }

@@ -20,22 +20,22 @@ using namespace osuCrypto;
 using namespace sci;
 
 void multiplexer(int party_id, uint8_t *sel, block *dataA, block *output,
-                 int32_t size, Peer* player) __attribute__((optimize("O0")));
+                 int32_t size, Peer* player);
 
 void multiplexer(int party_id, uint8_t *sel, uint64_t *dataA, uint64_t *output,
-                 int32_t size, int32_t bw_x, int32_t bw_y, Peer* player) __attribute__((optimize("O0")));
+                 int32_t size, int32_t bw_x, int32_t bw_y, Peer* player);
 
 void multiplexer(int party_id, uint8_t *sel, GroupElement *dataA, GroupElement *output,
-                 int32_t size, Peer* player) __attribute__((optimize("O0")));
+                 int32_t size, Peer* player);
 
 void multiplexer2(int party_id, uint8_t *sel, uint64_t *dataA, uint64_t *dataB, uint64_t *output,
-                  int32_t size, int32_t bw_x, int32_t bw_y, Peer* player) __attribute__((optimize("O0")));
+                  int32_t size, int32_t bw_x, int32_t bw_y, Peer* player);
 
 void multiplexer2(int party_id, uint8_t *control_bit, osuCrypto::block* dataA, osuCrypto::block* dataB,
-                          osuCrypto::block* output, int32_t size, Peer* player) __attribute__((optimize("O0")));
+                          osuCrypto::block* output, int32_t size, Peer* player);
 
 void multiplexer2(int party_id, uint8_t *control_bit, GroupElement* dataA, GroupElement* dataB,
-                          GroupElement* output, int32_t size, Peer* player) __attribute__((optimize("O0")));
+                          GroupElement* output, int32_t size, Peer* player);
 
 void insecure_multiplexer2(int party_id, uint8_t *control_bit, GroupElement* dataA, GroupElement* dataB,
                            GroupElement* output, int32_t size, Peer* player);
@@ -44,9 +44,9 @@ void insecure_multiplexer(int party_id, uint8_t *control_bit, GroupElement* data
                           GroupElement* output, int32_t size, Peer* player);
 
 void and_wrapper(int party_id, GroupElement* dataA, GroupElement* dataB, GroupElement* output, int32_t size,
-               Peer* player) __attribute__((optimize("O0")));
+               Peer* player);
 
-u8 and_wrapper(int party_id, GroupElement* dataA, GroupElement* dataB, Peer* player) __attribute__((optimize("O0")));
+u8 and_wrapper(int party_id, GroupElement* dataA, GroupElement* dataB, Peer* player);
 
 u8 and_wrapper(int party_id, u8 dataA, u8 dataB, Peer* player);
 
@@ -70,7 +70,7 @@ u8 check_bit_overflow(int party_id, u8 x_share, u8 r_prev_share, Peer* player);
 
 GroupElement cross_term_gen(int party_id, GroupElement* input, bool hold_arithmetic, Peer* player);
 
-void cross_term_gen(int party_id, GroupElement* input, GroupElement* output, bool hold_arithmetic, int size, Peer* player)__attribute__((optimize("O0")));
+void cross_term_gen(int party_id, GroupElement* input, GroupElement* output, bool hold_arithmetic, int size, Peer* player);
 
 void beaver_mult_offline(int party_id, GroupElement* a, GroupElement* b, GroupElement* c, Peer* player, int size);
 
@@ -79,7 +79,7 @@ void beaver_mult_online(int party_id, GroupElement input0, GroupElement input1,
                         GroupElement* output, Peer* player);
 
 void beaver_mult_online(int party_id, GroupElement* input0, GroupElement* input1,
-                        GroupElement* a, GroupElement* b, GroupElement* c,
+                        const GroupElement* a, const GroupElement* b, const GroupElement* c,
                         GroupElement* output, int size, Peer* player);
 
 void B2A(int party_id, u8* x, GroupElement* y, int size, int bw_y, Peer* player);

@@ -17,28 +17,28 @@
 #include "utils.h"
 
 SineKeyPack sine_offline(int party_id, int Bin, int Bout, int scale, bool using_lut,
-                         int digdec_new_bitsize, int approx_segNum, int approx_deg)__attribute__((optimize("O0")));
+                         int digdec_new_bitsize, int approx_segNum, int approx_deg);
 
-GroupElement sine(int party_id, GroupElement input, SineKeyPack key)__attribute__((optimize("O0")));
+GroupElement sine(int party_id, GroupElement input, const SineKeyPack& key);
 
 CosineKeyPack cosine_offline(int party_id, int Bin, int Bout, int scale, bool using_lut,
                          int digdec_new_bitsize, int approx_segNum, int approx_deg);
 
-GroupElement cosine(int party_id, GroupElement input, CosineKeyPack key);
+GroupElement cosine(int party_id, GroupElement input, const CosineKeyPack& key);
 
 TangentKeyPack tangent_offline(int party_id, int Bin, int Bout, int scale, bool using_lut,
                                int approx_segNum, int approx_deg);
 
-GroupElement tangent(int party_id, GroupElement input, TangentKeyPack key);
+GroupElement tangent(int party_id, GroupElement input, const TangentKeyPack& key);
 
 ProximityKeyPack proximity_offline(int party_id, int Bin, int scale, bool using_lut, int digdec_new_bitsize,
-                               int approx_segNum, int approx_deg)__attribute__((optimize("O0")));
+                               int approx_segNum, int approx_deg);
 
 GroupElement proximity(int party_id, GroupElement xA, GroupElement yA, GroupElement xB, GroupElement yB,
-                       ProximityKeyPack key)__attribute__((optimize("O0")));
+                       const ProximityKeyPack& key);
 
 BiometricKeyPack biometric_offline(int party_id, int Bin, int scale, bool using_lut,
                                    int approx_segNum, int approx_deg);
 
 void biometric(int party_id, GroupElement xA, GroupElement yA, GroupElement xB, GroupElement yB,
-               GroupElement* output, BiometricKeyPack key)__attribute__((optimize("O0")));
+               GroupElement* output, const BiometricKeyPack& key);

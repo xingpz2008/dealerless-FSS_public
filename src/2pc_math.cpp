@@ -197,7 +197,7 @@ SineKeyPack sine_offline(int party_id, int Bin, int Bout, int scale, bool using_
     return output;
 }
 
-GroupElement sine(int party_id, GroupElement input, SineKeyPack key){
+GroupElement sine(int party_id, GroupElement input, const SineKeyPack& key){
     // This is the implementation of sine pi * x
     GroupElement output(0, input.bitsize);
     GroupElement x_mod = ring_extend(
@@ -293,8 +293,10 @@ GroupElement sine(int party_id, GroupElement input, SineKeyPack key){
             delete[] publicSinList[i];
             delete[] publicCosList[i];
         }
+        delete[] shifted_vector_list;
+        delete[] publicSinList;
+        delete[] publicCosList;
         delete[] x_seg;
-        delete[] key.LUTProductTRKeyList;
     }else{
         y_0 = spline_poly_approx(party_id, x_frac, key.SplineApproxKey);
     }
@@ -308,7 +310,6 @@ GroupElement sine(int party_id, GroupElement input, SineKeyPack key){
     delete[] v;
     delete[] transform_coefficients;
     delete x_transform;
-    //freeSineKeyPack(key);
     return output;
 }
 
@@ -434,7 +435,7 @@ CosineKeyPack cosine_offline(int party_id, int Bin, int Bout, int scale, bool us
     return output;
 }
 
-GroupElement cosine(int party_id, GroupElement input, CosineKeyPack key){
+GroupElement cosine(int party_id, GroupElement input, const CosineKeyPack& key){
     // This is the implementation of cosine pi * x
     GroupElement output(0, input.bitsize);
     GroupElement x_mod = ring_extend(
@@ -531,7 +532,6 @@ GroupElement cosine(int party_id, GroupElement input, CosineKeyPack key){
             delete[] publicCosList[i];
         }
         delete[] x_seg;
-        delete[] key.LUTProductTRKeyList;
     }else{
         y_0 = spline_poly_approx(party_id, x_frac, key.SplineApproxKey);
     }
@@ -545,7 +545,6 @@ GroupElement cosine(int party_id, GroupElement input, CosineKeyPack key){
     delete[] v;
     delete[] transform_coefficients;
     delete x_transform;
-    //freeCosineKeyPack(key);
     return output;
 }
 
@@ -640,7 +639,7 @@ TangentKeyPack tangent_offline(int party_id, int Bin, int Bout, int scale, bool 
     return output;
 }
 
-GroupElement tangent(int party_id, GroupElement input, TangentKeyPack key){
+GroupElement tangent(int party_id, GroupElement input, const TangentKeyPack& key){
     // This is the implementation of tangent pi * x
     GroupElement output(0, input.bitsize);
     GroupElement x_mod = ring_extend(
@@ -683,7 +682,7 @@ GroupElement tangent(int party_id, GroupElement input, TangentKeyPack key){
     if (key.using_lut){
         // Call digdec first
         int digdec_segNum = 1;
-        key.digdec_new_bitsize = key.scale - 1;
+        const int tangent_lut_bits = key.scale - 1;
         GroupElement* x_seg = new GroupElement[digdec_segNum];
         x_seg[0] = x_frac;
         // For each segment, call lut, x_seg 0 is the lowest segment
@@ -692,14 +691,14 @@ GroupElement tangent(int party_id, GroupElement input, TangentKeyPack key){
         GroupElement** publicTanList = new GroupElement * [digdec_segNum];
         GroupElement* tan_lut_output = new GroupElement[digdec_segNum];
         for (int i = 0; i < digdec_segNum; i++){
-            shifted_vector_list[i] = new GroupElement[1 << key.digdec_new_bitsize];
-            publicTanList[i] = new GroupElement[1 << key.digdec_new_bitsize];
+            shifted_vector_list[i] = new GroupElement[1 << tangent_lut_bits];
+            publicTanList[i] = new GroupElement[1 << tangent_lut_bits];
         }
-        create_sub_lut(2, key.digdec_new_bitsize, input.bitsize, key.scale,
+        create_sub_lut(2, tangent_lut_bits, input.bitsize, key.scale,
                        digdec_segNum, publicTanList);
         for (int i = 0; i < digdec_segNum; i++){
             tan_lut_output[i] = pub_lut(party_id, x_seg[i], publicTanList[i],
-                                        shifted_vector_list[i], 1 << key.digdec_new_bitsize,
+                                        shifted_vector_list[i], 1 << tangent_lut_bits,
                                         input.bitsize, key.EvalAllKeyList[i]);
         }
         y_0 = tan_lut_output[0];
@@ -707,6 +706,9 @@ GroupElement tangent(int party_id, GroupElement input, TangentKeyPack key){
             delete[] shifted_vector_list[i];
             delete[] publicTanList[i];
         }
+        delete[] shifted_vector_list;
+        delete[] publicTanList;
+        delete[] tan_lut_output;
         delete[] x_seg;
     }else{
         y_0 = spline_poly_approx(party_id, x_frac, key.SplineApproxKey);
@@ -721,7 +723,6 @@ GroupElement tangent(int party_id, GroupElement input, TangentKeyPack key){
     delete[] v;
     delete[] transform_coefficients;
     delete x_transform;
-    //freeTangentKeyPack(key);
     return output;
 }
 
@@ -772,7 +773,7 @@ ProximityKeyPack proximity_offline(int party_id, int Bin, int scale, bool using_
 }
 
 GroupElement proximity(int party_id, GroupElement xA, GroupElement yA, GroupElement xB, GroupElement yB,
-                       ProximityKeyPack key){
+                       const ProximityKeyPack& key){
     // delta = sin^2 pi [(xA-xB)/2] + cos pi xA * cos pi xB * sin^2 pi [(yA-yB)/2]
     int scale = key.scale;
     GroupElement front_input = scale_mult((xA - xB), GroupElement(0.5, xA.bitsize, scale), scale);
@@ -826,7 +827,6 @@ GroupElement proximity(int party_id, GroupElement xA, GroupElement yA, GroupElem
                                                              key.ProductTRKeyList[3]);
     GroupElement output = front_output + back_output_truncated;
 
-    // freeProximityKeyPack(key);
     delete[] mulA;
     delete[] mulB;
     delete[] batch_mul_output;
@@ -852,7 +852,7 @@ BiometricKeyPack biometric_offline(int party_id, int Bin, int scale, bool using_
 }
 
 void biometric(int party_id, GroupElement xA, GroupElement yA, GroupElement xB, GroupElement yB,
-               GroupElement* output, BiometricKeyPack key){
+               GroupElement* output, const BiometricKeyPack& key){
     tangent(party_id, xA, key.TangentKeyList[0]);
     tangent(party_id, xB, key.TangentKeyList[1]);
     tangent(party_id, yA, key.TangentKeyList[2]);

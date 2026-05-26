@@ -628,15 +628,15 @@ void beaver_mult_offline(int party_id, GroupElement* a, GroupElement* b, GroupEl
     // Here we have to invoke OT for generating cross-term c
     // we also have to call rpg
     // This function is optimized with batch operation
-    srand((unsigned)time(NULL));
+    auto rng = secure_prng();
     GroupElement* OTshareC = new GroupElement[2 * size];
     GroupElement* OTinputAB = new GroupElement[2 * size];
-    GroupElement localShareC[size];
+    std::vector<GroupElement> localShareC(size);
     for (int i = 0; i < size; i++) {
-        auto a_value = rand() % (1ULL << a[i].bitsize);
-        auto b_value = rand() % (1ULL << b[i].bitsize);
-        a[i].value = a_value;
-        b[i].value = b_value;
+        a[i] = random_ge_from_prng(rng, a[i].bitsize);
+        b[i] = random_ge_from_prng(rng, b[i].bitsize);
+        auto a_value = a[i].value;
+        auto b_value = b[i].value;
 
         // Invoke OT for cross term generation
         localShareC[i] = GroupElement(a_value * b_value, c[i].bitsize);
@@ -691,7 +691,7 @@ void beaver_mult_online(int party_id, GroupElement input0, GroupElement input1,
 }
 
 void beaver_mult_online(int party_id, GroupElement* input0, GroupElement* input1,
-                        GroupElement* a, GroupElement* b, GroupElement* c,
+                        const GroupElement* a, const GroupElement* b, const GroupElement* c,
                         GroupElement* output, int size, Peer* player){
     // This is the batched output of beaver multiplication
     for (int i = 0; i < size; i++){

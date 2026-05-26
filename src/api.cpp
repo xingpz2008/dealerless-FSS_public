@@ -87,12 +87,20 @@ void StartComputation()
     }
 
     if (party == DEALER) {
-        AES aesSeed(toBlock(0, time(NULL)));
-        auto commonSeed = aesSeed.ecbEncBlock(ZeroBlock);
-        server->send_block(commonSeed);
+        auto commonSeed = osuCrypto::sysRandomSeed();
+        if (server != nullptr) {
+            server->send_block(commonSeed);
+        }
+        if (client != nullptr) {
+            client->send_block(commonSeed);
+        }
         prngShared.SetSeed(commonSeed);
     }
-    else if (party == SERVER) {
+    else if (party == SERVER && dealer != nullptr) {
+        auto commonSeed = dealer->recv_block();
+        prngShared.SetSeed(commonSeed);
+    }
+    else if (party == CLIENT && dealer != nullptr) {
         auto commonSeed = dealer->recv_block();
         prngShared.SetSeed(commonSeed);
     }
