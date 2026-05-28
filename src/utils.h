@@ -33,35 +33,35 @@ SOFTWARE.
 template <typename T>
 using matrix = std::vector<std::vector<T>>;
 
-void MatAdd(int s1, int s2, GroupElement *A, GroupElement* B, GroupElement *C);
+void MatAdd(int s1, int s2, const GroupElement *A, const GroupElement* B, GroupElement *C);
 
-void MatAdd4(int s0, int s1, int s2, int s3, GroupElement* A, GroupElement* B, GroupElement* C);
+void MatAdd4(int s0, int s1, int s2, int s3, const GroupElement* A, const GroupElement* B, GroupElement* C);
 
-void MatSub(int s1, int s2, GroupElement *A, GroupElement* B, GroupElement *C);
+void MatSub(int s1, int s2, const GroupElement *A, const GroupElement* B, GroupElement *C);
 
-void MatSub4(int s0, int s1, int s2, int s3, GroupElement* A, GroupElement* B, GroupElement* C);
+void MatSub4(int s0, int s1, int s2, int s3, const GroupElement* A, const GroupElement* B, GroupElement* C);
 
-void MatMul(int s1, int s2, int s3, GroupElement *A, GroupElement* B, GroupElement *C);
+void MatMul(int s1, int s2, int s3, const GroupElement *A, const GroupElement* B, GroupElement *C);
 
-void MatCopy(int s1, int s2, GroupElement *input, GroupElement *output);
+void MatCopy(int s1, int s2, const GroupElement *input, GroupElement *output);
 
-void MatCopy4(int s1, int s2, int s3, int s4, GroupElement *input, GroupElement *output);
+void MatCopy4(int s1, int s2, int s3, int s4, const GroupElement *input, GroupElement *output);
 
 void MatFinalize4(int s1, int s2, int s3, int s4, GroupElement *input);
 
-void Conv2DReshapeFilter(int FH, int FW, int CI, int CO, GroupElement* filter, GroupElement* reshapedFilter);
+void Conv2DReshapeFilter(int FH, int FW, int CI, int CO, const GroupElement* filter, GroupElement* reshapedFilter);
 
-void Conv2DReshapeInput(int N, int H, int W, int CI, int FH, int FW, int zPadHLeft, int zPadHRight, int zPadWLeft, int zPadWRight, int strideH, int strideW, int RRows, int RCols, GroupElement *inputArr, GroupElement *outputArr);
+void Conv2DReshapeInput(int N, int H, int W, int CI, int FH, int FW, int zPadHLeft, int zPadHRight, int zPadWLeft, int zPadWRight, int strideH, int strideW, int RRows, int RCols, const GroupElement *inputArr, GroupElement *outputArr);
 
-void Conv2DReshapeOutput(int N, int finalH, int finalW, int CO, GroupElement *inputArr, GroupElement *outputArr);
+void Conv2DReshapeOutput(int N, int finalH, int finalW, int CO, const GroupElement *inputArr, GroupElement *outputArr);
 
 void Conv2DPlaintext(int N, int H, int W, int CI, 
 				   int FH, int FW, int CO, 
 				   int zPadHLeft, int zPadHRight, int zPadWLeft, int zPadWRight, 
 				   int strideH, int strideW, 
-				   GroupElement *inputArr, 
-				   GroupElement * filterArr, 
-				   GroupElement * outArr);
+                       const GroupElement *inputArr,
+                       const GroupElement * filterArr,
+                       GroupElement * outArr);
 
 std::vector<GroupElement> generateOffsetPolynomial(int bitsize, const std::vector<GroupElement> &poly, GroupElement rin);
 
@@ -83,8 +83,8 @@ int64_t getSignedValue(GroupElement x);
 
 int fixed_point_approx_eval_bits(int output_bits, int scale);
 
-void matmul_eval_helper(int dim1, int dim2, int dim3, GroupElement *A,
-                            GroupElement *B, GroupElement *C, GroupElement *ka, GroupElement *kb, GroupElement *kc);
+void matmul_eval_helper(int dim1, int dim2, int dim3, const GroupElement *A,
+                            const GroupElement *B, GroupElement *C, const GroupElement *ka, const GroupElement *kb, const GroupElement *kc);
 
 void create_approx_spline(int uuid, int bitsize, int scale, GroupElement* coefficientList);
 

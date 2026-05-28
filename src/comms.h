@@ -25,6 +25,7 @@ SOFTWARE.
 
 #include <string>
 #include <iostream>
+#include <memory>
 #include "group_element.h"
 #include "keypack.h"
 #include "array.h"
@@ -63,23 +64,34 @@ public:
     uint64_t bytesSent = 0;
     uint64_t bytesReceived = 0;
     uint64_t rounds = 0;
-    sci::IOPack *iopack_;
-    sci::OTPack *otpack;
-    sci::IKNP<sci::NetIO> *block_ot;
-    sci::IKNP<sci::NetIO> *block_ot_reversed;
-    MillionaireProtocol *MillInstance = NULL;
 
+    sci::IOPack* getIOPack() noexcept {
+        return iopack_.get();
+    }
+
+    sci::OTPack* getOTPack() noexcept {
+        return otpack.get();
+    }
+
+private:
+    std::unique_ptr<sci::IOPack> iopack_;
+    std::unique_ptr<sci::OTPack> otpack;
+    std::unique_ptr<sci::IKNP<sci::NetIO>> block_ot;
+    std::unique_ptr<sci::IKNP<sci::NetIO>> block_ot_reversed;
+    std::unique_ptr<MillionaireProtocol> MillInstance;
+
+public:
     Peer(std::string ip, int port);
     Peer(int sendsocket, int recvsocket) {
         this->sendsocket = sendsocket;
         this->recvsocket = recvsocket;
         // Here we change party number from 2S 3C to 1S, 2C
-        this->iopack_= new sci::IOPack(party-1, port);
-        this->otpack = new sci::OTPack(this->iopack_, party-1);
-        this->block_ot = new sci::IKNP<sci::NetIO>(this->iopack_->io);
-        this->block_ot_reversed = new sci::IKNP<sci::NetIO>(this->iopack_->io_rev);
-        if (this->MillInstance == NULL){
-            this->MillInstance = new MillionaireProtocol(party - 1, iopack_, otpack);
+        this->iopack_ = std::make_unique<sci::IOPack>(party - 1, port);
+        this->otpack = std::make_unique<sci::OTPack>(this->iopack_.get(), party - 1);
+        this->block_ot = std::make_unique<sci::IKNP<sci::NetIO>>(this->iopack_->io);
+        this->block_ot_reversed = std::make_unique<sci::IKNP<sci::NetIO>>(this->iopack_->io_rev);
+        if (!this->MillInstance){
+            this->MillInstance = std::make_unique<MillionaireProtocol>(party - 1, iopack_.get(), otpack.get());
         }
     }
     Peer(std::string filename) {
@@ -96,13 +108,13 @@ public:
 
     void send_u8(const u8&);
 
-    void send_u8(u8* b, int size);
+    void send_u8(const u8* b, int size);
 
     void recv_u8(u8* output, int size);
 
     void send_u64(const uint64_t &b);
 
-    void send_u64(uint64_t* input, int size);
+    void send_u64(const uint64_t* input, int size);
 
     void recv_u64(uint64_t* output, int size);
 
@@ -120,7 +132,7 @@ public:
 
     void send_input(const GroupElement &g);
 
-    void send_batched_input(GroupElement *g, int size, int bw);
+    void send_batched_input(const GroupElement *g, int size, int bw);
 
     void send_mult_key(const MultKey &k);
 
@@ -164,20 +176,20 @@ public:
 
     void recv_cot(uint64_t* recv_arr, int size, uint8_t* sel);
 
-    void send_cot(GroupElement* data, GroupElement* output, int length, bool using_aux_iknp);
+    void send_cot(const GroupElement* data, GroupElement* output, int length, bool using_aux_iknp);
 
     void recv_cot(GroupElement* recv_arr, int size, uint8_t* sel, bool using_aux_iknp);
 
     void mill(uint8_t *res, uint64_t *data, int num_cmps, int bitlength,
               bool greater_than = true, bool equality = false, int radix_base = MILL_PARAM);
 
-    void mill(uint8_t *res, uint64_t *dataA, uint64_t* dataB, int num_cmps, int bitlength,
+    void mill(uint8_t *res, const uint64_t *dataA, const uint64_t* dataB, int num_cmps, int bitlength,
               bool greater_than = true, bool equality = false, int radix_base = MILL_PARAM);
 
-    void mill(uint8_t *res, GroupElement *data, int num_cmps,
+    void mill(uint8_t *res, const GroupElement *data, int num_cmps,
               bool greater_than = true, bool equality = false, int radix_base = MILL_PARAM);
 
-    void mill(uint8_t *res, GroupElement* dataA, GroupElement* dataB, int num_cmps,
+    void mill(uint8_t *res, const GroupElement* dataA, const GroupElement* dataB, int num_cmps,
               bool greater_than = true, bool equality = false, int radix_base = MILL_PARAM);
 
 };

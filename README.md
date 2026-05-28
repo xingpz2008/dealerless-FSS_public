@@ -45,6 +45,7 @@ This repository consists of the following parts:
 - __src__: Implementations for the 2PC FSS scheme and case-study helpers.
 - __2pc_test__: Example programs, performance drivers, and correctness checks.
 - __scripts__: Build and validation helpers for a local checkout.
+- __docs__: Developer usage guide and public development notes.
 
 ## Installation
 The implementation builds against a local [EzPC](https://github.com/mpc-msri/EzPC)
@@ -144,11 +145,12 @@ scripts/run_safety_perf.sh --skip-configure --skip-build
 ```
 
 ## Usage
-For detailed usage, refer to the `2pc_test` folder.
+For developer-facing usage, integration notes, key lifetime rules, and extension
+guidelines, see [`docs/developer-usage.md`](docs/developer-usage.md).
 
-The examples expose the protocol wrappers directly. They can also be used as
-reference code for integrating the FSS routines into post-compiled EzPC/Athos
-workflows.
+The examples in `2pc_test` expose the protocol wrappers directly. They can also
+be used as reference code for integrating the FSS routines into post-compiled
+EzPC/Athos workflows.
 
 ## Disclaimer
 This repository is a proof-of-concept prototype.

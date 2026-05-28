@@ -27,7 +27,7 @@
 using namespace osuCrypto;
 
 [[deprecated("Legacy incorrect iDCF path: do not use for correctness-sensitive code.")]]
-iDCFKeyPack keyGeniDCF(int party_id, int Bin, int Bout, GroupElement idx, GroupElement* payload, bool masked = true);
+iDCFKeyPack keyGeniDCF(int party_id, int Bin, int Bout, GroupElement idx, const GroupElement& payload, bool masked = true);
 
 newDCFKeyPack keyGenNewDCF(int party_id, int Bin, int Bout, GroupElement idx, GroupElement payload);
 
@@ -42,6 +42,6 @@ void evaliDCF(int party, GroupElement *res, GroupElement idx, const iDCFKeyPack&
 void evaliDCF(int party, GroupElement *res, GroupElement idx, const iDCFKeyPack& key);
 
 [[deprecated("Legacy incorrect iDCF path: do not use for correctness-sensitive code.")]]
-void evaliDCF(int party, GroupElement* res, GroupElement* idx, iDCFKeyPack* keyList, int size, int max_bitsize);
+void evaliDCF(int party, GroupElement* res, const GroupElement* idx, const iDCFKeyPack* keyList, int size, int max_bitsize);
 
-void evalNewDCF(int party, GroupElement* res, GroupElement* idx, const newDCFKeyPack* keyList, int size, int max_bitsize);
+void evalNewDCF(int party, GroupElement* res, const GroupElement* idx, const newDCFKeyPack* keyList, int size, int max_bitsize);

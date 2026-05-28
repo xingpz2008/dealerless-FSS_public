@@ -102,6 +102,15 @@ inline void resetKeyArray(KeyArray<T>& array) {
     array.reset();
 }
 
+template <typename T>
+inline KeyArray<T> makeKeyArray(std::size_t size) {
+    KeyArray<T> array;
+    if (size > 0) {
+        array.reset(new T[size]);
+    }
+    return array;
+}
+
 struct MultKey{
     int Bin, Bout;
     GroupElement a, b, c;

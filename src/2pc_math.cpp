@@ -14,6 +14,9 @@
 
 #include "2pc_math.h"
 
+#include <array>
+#include <vector>
+
 namespace {
 
 void use_raw_transform_slopes(GroupElement* coefficients, int interval_count,
@@ -95,15 +98,14 @@ SineKeyPack sine_offline(int party_id, int Bin, int Bout, int scale, bool using_
         // create dig dec keys
         output.DigDecKey = digdec_offline(party_id, scale - 1, digdec_new_bitsize);
         int digdec_segNum = (scale - 1) / digdec_new_bitsize + (((scale - 1) % digdec_new_bitsize == 0) ? 0 : 1);
-        DPFKeyPack* EvalAllKeyList = new DPFKeyPack[digdec_segNum];
+        output.EvalAllKeyList = makeKeyArray<DPFKeyPack>(digdec_segNum);
         const int product_bits = Bout + scale;
         for (int i = 0; i < digdec_segNum; i++){
             // Here we need random idx at r, which do not require mask because it was used in EvalAll.
-            EvalAllKeyList[i] =
+            output.EvalAllKeyList[i] =
                 pub_lut_offline(party_id, digdec_new_bitsize, product_bits);
         }
-        output.EvalAllKeyList = EvalAllKeyList;
-        output.LUTProductTRKeyList = new TRKeyPack[2];
+        output.LUTProductTRKeyList = makeKeyArray<TRKeyPack>(2);
         for (int i = 0; i < 2; i++) {
             output.LUTProductTRKeyList[i] =
                 truncate_and_reduce_offline(party_id, product_bits, scale);
@@ -135,17 +137,17 @@ SineKeyPack sine_offline(int party_id, int Bin, int Bout, int scale, bool using_
         // Example: 0216 = 2 deg poly-approx to sine with 16 segs
         // create uuid
         int approx_uuid = 0 * 1000 + approx_deg * 100 + approx_segNum;
-        GroupElement* publicCoefficientList = new GroupElement[(1 + approx_deg) * approx_segNum];
+        std::vector<GroupElement> publicCoefficientList(
+            (1 + approx_deg) * approx_segNum);
         create_approx_spline(approx_uuid, approx_eval_bits, scale,
-                             publicCoefficientList);
+                             publicCoefficientList.data());
         output.SplineApproxKey = spline_poly_approx_offline(
-            party_id, scale - 1, approx_eval_bits, publicCoefficientList,
+            party_id, scale - 1, approx_eval_bits, publicCoefficientList.data(),
             approx_deg, approx_segNum, scale);
-        delete[] publicCoefficientList;
     }
     // One containment key determines the half-period interval. Its output is
     // locally projected into the evaluation and transform rings as needed.
-    GroupElement* first_knots_list = new GroupElement[3];
+    std::array<GroupElement, 3> first_knots_list;
     for (int i = 0; i < 3; i++){
         first_knots_list[i] = GroupElement(0.5 * (i + 1), 2 + scale, scale);
     }
@@ -155,12 +157,15 @@ SineKeyPack sine_offline(int party_id, int Bin, int Bout, int scale, bool using_
     const int ctn_bits =
         approx_eval_bits > 2 + scale ? approx_eval_bits : 2 + scale;
     output.CtnKey =
-        containment_offline_public(party_id, ctn_bits, first_knots_list, 3);
+        containment_offline_public(party_id, ctn_bits, first_knots_list.data(), 3);
 
     output.MTList_len = MTList_len;
-    GroupElement* AList = new GroupElement[MTList_len];
-    GroupElement* BList = new GroupElement[MTList_len];
-    GroupElement* CList = new GroupElement[MTList_len];
+    output.AList = makeKeyArray<GroupElement>(MTList_len);
+    output.BList = makeKeyArray<GroupElement>(MTList_len);
+    output.CList = makeKeyArray<GroupElement>(MTList_len);
+    GroupElement* AList = output.AList.data();
+    GroupElement* BList = output.BList.data();
+    GroupElement* CList = output.CList.data();
     // The bit size of MTs are different, for specialized transformation, it requires 1 Bout, 1 (2+s)
     // For MTs on digdec, we need bit size = Bout
     for (int i = 0; i < MTList_len; i++){
@@ -188,12 +193,6 @@ SineKeyPack sine_offline(int party_id, int Bin, int Bout, int scale, bool using_
     }
     beaver_mult_offline(party_id, &(AList[MTList_len - 1]), &(BList[MTList_len - 1]), &(CList[MTList_len - 1]),
                         peer, 1);
-    output.AList = AList;
-    output.BList = BList;
-    output.CList = CList;
-
-    delete[] first_knots_list;
-
     return output;
 }
 
@@ -203,13 +202,13 @@ GroupElement sine(int party_id, GroupElement input, const SineKeyPack& key){
     GroupElement x_mod = ring_extend(
         party_id, segment(input, key.scale + 1).second, key.scale + 2,
         key.ModExtendKey);
-    GroupElement* v = new GroupElement[4];
-    containment(party_id, x_mod, v, 3, key.CtnKey);
-    GroupElement* transform_coefficients = new GroupElement[3 * 4];
+    std::array<GroupElement, 4> v;
+    containment(party_id, x_mod, v.data(), 3, key.CtnKey);
+    std::array<GroupElement, 12> transform_coefficients;
     for (int i = 0; i < 12; i++){
         transform_coefficients[i].bitsize = key.scale + 2;
     }
-    set_raw_sine_transform(transform_coefficients, key.scale + 2, key.scale);
+    set_raw_sine_transform(transform_coefficients.data(), key.scale + 2, key.scale);
     // Compute coefficients
     GroupElement m[3];
     const int transform_bits = key.scale + 2;
@@ -230,43 +229,50 @@ GroupElement sine(int party_id, GroupElement input, const SineKeyPack& key){
             }
         }
     }
-    GroupElement* x_transform = new GroupElement(0, key.scale + 2);
-    beaver_mult_online(party_id, m[1], x_mod, key.AList[key.MTList_len - 1], key.BList[key.MTList_len - 1],
-                       key.CList[key.MTList_len - 1], x_transform, peer);
-    *x_transform = *x_transform + m[2];
-    GroupElement x_frac = segment(*x_transform, key.scale - 1).second;
+    GroupElement x_transform = beaver_mult_online(
+        party_id, m[1], x_mod, key.AList[key.MTList_len - 1],
+        key.BList[key.MTList_len - 1], key.CList[key.MTList_len - 1], peer);
+    x_transform = x_transform + m[2];
+    GroupElement x_frac = segment(x_transform, key.scale - 1).second;
     GroupElement y_0 = GroupElement(0, input.bitsize);
     if (key.using_lut){
         // Call digdec first
         int digdec_segNum = (key.scale - 1) / key.digdec_new_bitsize +
                 (((key.scale - 1) % key.digdec_new_bitsize == 0) ? 0 : 1);
-        GroupElement* x_seg = new GroupElement[digdec_segNum];
-        digdec(party_id, x_frac, x_seg, key.digdec_new_bitsize, key.DigDecKey);
+        std::vector<GroupElement> x_seg(digdec_segNum);
+        digdec(party_id, x_frac, x_seg.data(), key.digdec_new_bitsize, key.DigDecKey);
         // For each segment, call lut, x_seg 0 is the lowest segment
         // Here we want the shifted_vector, so call it at once
-        GroupElement** shifted_vector_list = new GroupElement * [digdec_segNum];
-        GroupElement** publicSinList = new GroupElement * [digdec_segNum];
-        GroupElement** publicCosList = new GroupElement * [digdec_segNum];
-        GroupElement sin_lut_output[digdec_segNum];
-        GroupElement cos_lut_output[digdec_segNum];
         const int lut_output_bits = input.bitsize + key.scale;
+        const int lut_size = 1 << key.digdec_new_bitsize;
+        std::vector<std::vector<GroupElement>> shifted_vector_storage(
+            digdec_segNum, std::vector<GroupElement>(lut_size));
+        std::vector<std::vector<GroupElement>> publicSinStorage(
+            digdec_segNum, std::vector<GroupElement>(lut_size));
+        std::vector<std::vector<GroupElement>> publicCosStorage(
+            digdec_segNum, std::vector<GroupElement>(lut_size));
+        std::vector<GroupElement*> shifted_vector_list(digdec_segNum);
+        std::vector<GroupElement*> publicSinList(digdec_segNum);
+        std::vector<GroupElement*> publicCosList(digdec_segNum);
+        std::vector<GroupElement> sin_lut_output(digdec_segNum);
+        std::vector<GroupElement> cos_lut_output(digdec_segNum);
         for (int i = 0; i < digdec_segNum; i++){
-            shifted_vector_list[i] = new GroupElement[1 << key.digdec_new_bitsize];
-            publicSinList[i] = new GroupElement[1 << key.digdec_new_bitsize];
-            publicCosList[i] = new GroupElement[1 << key.digdec_new_bitsize];
+            shifted_vector_list[i] = shifted_vector_storage[i].data();
+            publicSinList[i] = publicSinStorage[i].data();
+            publicCosList[i] = publicCosStorage[i].data();
         }
         create_sub_lut(0, key.scale - 1, lut_output_bits, key.scale,
-                       digdec_segNum, publicSinList);
+                       digdec_segNum, publicSinList.data());
         create_sub_lut(1, key.scale - 1, lut_output_bits, key.scale,
-                       digdec_segNum, publicCosList);
+                       digdec_segNum, publicCosList.data());
         for (int i = 0; i < digdec_segNum; i++){
             // We evaluate sin, for cos, we just use the vector to do inner product
             sin_lut_output[i] = pub_lut(party_id, x_seg[i], publicSinList[i],
-                                        shifted_vector_list[i], 1 << key.digdec_new_bitsize,
+                                        shifted_vector_list[i], lut_size,
                                         lut_output_bits, key.EvalAllKeyList[i]);
             cos_lut_output[i].bitsize = sin_lut_output[i].bitsize;
             cos_lut_output[i].value = 0;
-            for (int j = 0; j < 1 << key.digdec_new_bitsize; j++){
+            for (int j = 0; j < lut_size; j++){
                 cos_lut_output[i] = cos_lut_output[i] + shifted_vector_list[i][j] * publicCosList[i][j];
             }
         }
@@ -288,28 +294,16 @@ GroupElement sine(int party_id, GroupElement input, const SineKeyPack& key){
                 break;
             }
         }
-        for (int i = 0; i < digdec_segNum; i++) {
-            delete[] shifted_vector_list[i];
-            delete[] publicSinList[i];
-            delete[] publicCosList[i];
-        }
-        delete[] shifted_vector_list;
-        delete[] publicSinList;
-        delete[] publicCosList;
-        delete[] x_seg;
     }else{
         y_0 = spline_poly_approx(party_id, x_frac, key.SplineApproxKey);
     }
-    beaver_mult_online(party_id, m[0], y_0, key.AList[key.MTList_len - 2],
-                       key.BList[key.MTList_len - 2],key.CList[key.MTList_len - 2],
-                       &output, peer);
+    output = beaver_mult_online(party_id, m[0], y_0,
+                                key.AList[key.MTList_len - 2],
+                                key.BList[key.MTList_len - 2],
+                                key.CList[key.MTList_len - 2], peer);
     if (!key.using_lut && key.SplineApproxKey.Bout != key.Bout) {
         output = GroupElement(output.value, key.Bout);
     }
-
-    delete[] v;
-    delete[] transform_coefficients;
-    delete x_transform;
     return output;
 }
 
@@ -334,15 +328,14 @@ CosineKeyPack cosine_offline(int party_id, int Bin, int Bout, int scale, bool us
         // create dig dec keys
         output.DigDecKey = digdec_offline(party_id, scale - 1, digdec_new_bitsize);
         int digdec_segNum = (scale - 1) / digdec_new_bitsize + (((scale - 1) % digdec_new_bitsize == 0) ? 0 : 1);
-        DPFKeyPack* EvalAllKeyList = new DPFKeyPack[digdec_segNum];
+        output.EvalAllKeyList = makeKeyArray<DPFKeyPack>(digdec_segNum);
         const int product_bits = Bout + scale;
         for (int i = 0; i < digdec_segNum; i++){
             // Here we need random idx at r, which do not require mask because it was used in EvalAll.
-            EvalAllKeyList[i] =
+            output.EvalAllKeyList[i] =
                 pub_lut_offline(party_id, digdec_new_bitsize, product_bits);
         }
-        output.EvalAllKeyList = EvalAllKeyList;
-        output.LUTProductTRKeyList = new TRKeyPack[2];
+        output.LUTProductTRKeyList = makeKeyArray<TRKeyPack>(2);
         for (int i = 0; i < 2; i++) {
             output.LUTProductTRKeyList[i] =
                 truncate_and_reduce_offline(party_id, product_bits, scale);
@@ -373,17 +366,17 @@ CosineKeyPack cosine_offline(int party_id, int Bin, int Bout, int scale, bool us
         // Example: 0216 = 2 deg poly-approx to sine with 16 segs
         // create uuid
         int approx_uuid = 1 * 1000 + approx_deg * 100 + approx_segNum;
-        GroupElement* publicCoefficientList = new GroupElement[(1 + approx_deg) * approx_segNum];
+        std::vector<GroupElement> publicCoefficientList(
+            (1 + approx_deg) * approx_segNum);
         create_approx_spline(approx_uuid, approx_eval_bits, scale,
-                             publicCoefficientList);
+                             publicCoefficientList.data());
         output.SplineApproxKey = spline_poly_approx_offline(
-            party_id, scale - 1, approx_eval_bits, publicCoefficientList,
+            party_id, scale - 1, approx_eval_bits, publicCoefficientList.data(),
             approx_deg, approx_segNum, scale);
-        delete[] publicCoefficientList;
     }
     // One containment key determines the half-period interval. Its output is
     // locally projected into the evaluation and transform rings as needed.
-    GroupElement* first_knots_list = new GroupElement[3];
+    std::array<GroupElement, 3> first_knots_list;
     for (int i = 0; i < 3; i++){
         first_knots_list[i] = GroupElement(0.5 * (i + 1), 2 + scale, scale);
     }
@@ -393,12 +386,15 @@ CosineKeyPack cosine_offline(int party_id, int Bin, int Bout, int scale, bool us
     const int ctn_bits =
         approx_eval_bits > 2 + scale ? approx_eval_bits : 2 + scale;
     output.CtnKey =
-        containment_offline_public(party_id, ctn_bits, first_knots_list, 3);
+        containment_offline_public(party_id, ctn_bits, first_knots_list.data(), 3);
 
     output.MTList_len = MTList_len;
-    GroupElement* AList = new GroupElement[MTList_len];
-    GroupElement* BList = new GroupElement[MTList_len];
-    GroupElement* CList = new GroupElement[MTList_len];
+    output.AList = makeKeyArray<GroupElement>(MTList_len);
+    output.BList = makeKeyArray<GroupElement>(MTList_len);
+    output.CList = makeKeyArray<GroupElement>(MTList_len);
+    GroupElement* AList = output.AList.data();
+    GroupElement* BList = output.BList.data();
+    GroupElement* CList = output.CList.data();
     // The bit size of MTs are different, for specialized transformation, it requires 1 Bout, 1 (2+s)
     // For MTs on digdec, we need bit size = Bout
     for (int i = 0; i < MTList_len; i++){
@@ -426,12 +422,6 @@ CosineKeyPack cosine_offline(int party_id, int Bin, int Bout, int scale, bool us
     }
     beaver_mult_offline(party_id, &(AList[MTList_len - 1]), &(BList[MTList_len - 1]), &(CList[MTList_len - 1]),
                         peer, 1);
-    output.AList = AList;
-    output.BList = BList;
-    output.CList = CList;
-
-    delete[] first_knots_list;
-
     return output;
 }
 
@@ -441,13 +431,13 @@ GroupElement cosine(int party_id, GroupElement input, const CosineKeyPack& key){
     GroupElement x_mod = ring_extend(
         party_id, segment(input, key.scale + 1).second, key.scale + 2,
         key.ModExtendKey);
-    GroupElement* v = new GroupElement[4];
-    containment(party_id, x_mod, v, 3, key.CtnKey);
-    GroupElement* transform_coefficients = new GroupElement[3 * 4];
+    std::array<GroupElement, 4> v;
+    containment(party_id, x_mod, v.data(), 3, key.CtnKey);
+    std::array<GroupElement, 12> transform_coefficients;
     for (int i = 0; i < 12; i++){
         transform_coefficients[i].bitsize = key.scale + 2;
     }
-    set_raw_cosine_transform(transform_coefficients, key.scale + 2, key.scale);
+    set_raw_cosine_transform(transform_coefficients.data(), key.scale + 2, key.scale);
     // Compute coefficients
     GroupElement m[3];
     const int transform_bits = key.scale + 2;
@@ -468,43 +458,50 @@ GroupElement cosine(int party_id, GroupElement input, const CosineKeyPack& key){
             }
         }
     }
-    GroupElement* x_transform = new GroupElement(0, key.scale + 2);
-    beaver_mult_online(party_id, m[1], x_mod, key.AList[key.MTList_len - 1], key.BList[key.MTList_len - 1],
-                       key.CList[key.MTList_len - 1], x_transform, peer);
-    *x_transform = *x_transform + m[2];
-    GroupElement x_frac = segment(*x_transform, key.scale - 1).second;
+    GroupElement x_transform = beaver_mult_online(
+        party_id, m[1], x_mod, key.AList[key.MTList_len - 1],
+        key.BList[key.MTList_len - 1], key.CList[key.MTList_len - 1], peer);
+    x_transform = x_transform + m[2];
+    GroupElement x_frac = segment(x_transform, key.scale - 1).second;
     GroupElement y_0 = GroupElement(0, input.bitsize);
     if (key.using_lut){
         // Call digdec first
         int digdec_segNum = (key.scale - 1) / key.digdec_new_bitsize +
                             (((key.scale - 1) % key.digdec_new_bitsize == 0) ? 0 : 1);
-        GroupElement* x_seg = new GroupElement[digdec_segNum];
-        digdec(party_id, x_frac, x_seg, key.digdec_new_bitsize, key.DigDecKey);
+        std::vector<GroupElement> x_seg(digdec_segNum);
+        digdec(party_id, x_frac, x_seg.data(), key.digdec_new_bitsize, key.DigDecKey);
         // For each segment, call lut, x_seg 0 is the lowest segment
         // Here we want the shifted_vector, so call it at once
-        GroupElement* shifted_vector_list[digdec_segNum];
-        GroupElement* publicSinList[digdec_segNum];
-        GroupElement* publicCosList[digdec_segNum];
-        GroupElement sin_lut_output[digdec_segNum];
-        GroupElement cos_lut_output[digdec_segNum];
         const int lut_output_bits = input.bitsize + key.scale;
+        const int lut_size = 1 << key.digdec_new_bitsize;
+        std::vector<std::vector<GroupElement>> shifted_vector_storage(
+            digdec_segNum, std::vector<GroupElement>(lut_size));
+        std::vector<std::vector<GroupElement>> publicSinStorage(
+            digdec_segNum, std::vector<GroupElement>(lut_size));
+        std::vector<std::vector<GroupElement>> publicCosStorage(
+            digdec_segNum, std::vector<GroupElement>(lut_size));
+        std::vector<GroupElement*> shifted_vector_list(digdec_segNum);
+        std::vector<GroupElement*> publicSinList(digdec_segNum);
+        std::vector<GroupElement*> publicCosList(digdec_segNum);
+        std::vector<GroupElement> sin_lut_output(digdec_segNum);
+        std::vector<GroupElement> cos_lut_output(digdec_segNum);
         for (int i = 0; i < digdec_segNum; i++){
-            shifted_vector_list[i] = new GroupElement[1 << key.digdec_new_bitsize];
-            publicSinList[i] = new GroupElement[1 << key.digdec_new_bitsize];
-            publicCosList[i] = new GroupElement[1 << key.digdec_new_bitsize];
+            shifted_vector_list[i] = shifted_vector_storage[i].data();
+            publicSinList[i] = publicSinStorage[i].data();
+            publicCosList[i] = publicCosStorage[i].data();
         }
         create_sub_lut(0, key.scale - 1, lut_output_bits, key.scale,
-                       digdec_segNum, publicSinList);
+                       digdec_segNum, publicSinList.data());
         create_sub_lut(1, key.scale - 1, lut_output_bits, key.scale,
-                       digdec_segNum, publicCosList);
+                       digdec_segNum, publicCosList.data());
         for (int i = 0; i < digdec_segNum; i++){
             // We evaluate sin, for cos, we just use the vector to do inner product
             sin_lut_output[i] = pub_lut(party_id, x_seg[i], publicSinList[i],
-                                        shifted_vector_list[i], 1 << key.digdec_new_bitsize,
+                                        shifted_vector_list[i], lut_size,
                                         lut_output_bits, key.EvalAllKeyList[i]);
             cos_lut_output[i].bitsize = sin_lut_output[i].bitsize;
             cos_lut_output[i].value = 0;
-            for (int j = 0; j < 1 << key.digdec_new_bitsize; j++){
+            for (int j = 0; j < lut_size; j++){
                 cos_lut_output[i] = cos_lut_output[i] + shifted_vector_list[i][j] * publicCosList[i][j];
             }
         }
@@ -526,25 +523,16 @@ GroupElement cosine(int party_id, GroupElement input, const CosineKeyPack& key){
                 break;
             }
         }
-        for (int i = 0; i < digdec_segNum; i++) {
-            delete[] shifted_vector_list[i];
-            delete[] publicSinList[i];
-            delete[] publicCosList[i];
-        }
-        delete[] x_seg;
     }else{
         y_0 = spline_poly_approx(party_id, x_frac, key.SplineApproxKey);
     }
-    beaver_mult_online(party_id, m[0], y_0, key.AList[key.MTList_len - 2],
-                       key.BList[key.MTList_len - 2],key.CList[key.MTList_len - 2],
-                       &output, peer);
+    output = beaver_mult_online(party_id, m[0], y_0,
+                                key.AList[key.MTList_len - 2],
+                                key.BList[key.MTList_len - 2],
+                                key.CList[key.MTList_len - 2], peer);
     if (!key.using_lut && key.SplineApproxKey.Bout != key.Bout) {
         output = GroupElement(output.value, key.Bout);
     }
-
-    delete[] v;
-    delete[] transform_coefficients;
-    delete x_transform;
     return output;
 }
 
@@ -566,13 +554,12 @@ TangentKeyPack tangent_offline(int party_id, int Bin, int Bout, int scale, bool 
         output.digdec_new_bitsize = -1;
         output.approx_segNum = -1;
         output.approx_deg = -1;
-        DPFKeyPack* EvalAllKeyList = new DPFKeyPack[1];
+        output.EvalAllKeyList = makeKeyArray<DPFKeyPack>(1);
         for (int i = 0; i < 1; i++){
             // Digit Decomposition is inapplicable for tangent.
             // Here we need random idx at r, which do not require mask because it was used in EvalAll.
-            EvalAllKeyList[i] = pub_lut_offline(party_id, (scale - 1), Bout);
+            output.EvalAllKeyList[i] = pub_lut_offline(party_id, (scale - 1), Bout);
         }
-        output.EvalAllKeyList = EvalAllKeyList;
     }else{
         const int approx_eval_bits =
             fixed_point_approx_eval_bits(Bout, scale);
@@ -591,17 +578,17 @@ TangentKeyPack tangent_offline(int party_id, int Bin, int Bout, int scale, bool 
         // Example: 0216 = 2 deg poly-approx to sine with 16 segs
         // create uuid
         int approx_uuid = 2 * 1000 + approx_deg * 100 + approx_segNum;
-        GroupElement* publicCoefficientList = new GroupElement[(1 + approx_deg) * approx_segNum];
+        std::vector<GroupElement> publicCoefficientList(
+            (1 + approx_deg) * approx_segNum);
         create_approx_spline(approx_uuid, approx_eval_bits, scale,
-                             publicCoefficientList);
+                             publicCoefficientList.data());
         output.SplineApproxKey = spline_poly_approx_offline(
-            party_id, scale - 1, approx_eval_bits, publicCoefficientList,
+            party_id, scale - 1, approx_eval_bits, publicCoefficientList.data(),
             approx_deg, approx_segNum, scale);
-        delete[] publicCoefficientList;
     }
     // One containment key determines the half-period interval. Its output is
     // locally projected into the evaluation and transform rings as needed.
-    GroupElement* first_knots_list = new GroupElement[1];
+    std::array<GroupElement, 1> first_knots_list;
     for (int i = 0; i < 1; i++){
         first_knots_list[i] = GroupElement(0.5 * (i + 1), 1 + scale, scale);
     }
@@ -611,12 +598,15 @@ TangentKeyPack tangent_offline(int party_id, int Bin, int Bout, int scale, bool 
     const int ctn_bits =
         approx_eval_bits > 1 + scale ? approx_eval_bits : 1 + scale;
     output.CtnKey =
-        containment_offline_public(party_id, ctn_bits, first_knots_list, 1);
+        containment_offline_public(party_id, ctn_bits, first_knots_list.data(), 1);
 
     output.MTList_len = MTList_len;
-    GroupElement* AList = new GroupElement[MTList_len];
-    GroupElement* BList = new GroupElement[MTList_len];
-    GroupElement* CList = new GroupElement[MTList_len];
+    output.AList = makeKeyArray<GroupElement>(MTList_len);
+    output.BList = makeKeyArray<GroupElement>(MTList_len);
+    output.CList = makeKeyArray<GroupElement>(MTList_len);
+    GroupElement* AList = output.AList.data();
+    GroupElement* BList = output.BList.data();
+    GroupElement* CList = output.CList.data();
     // The bit size of MTs are different, for specialized transformation, it requires 1 Bout, 1 (2+s)
     // For MTs on digdec, we need bit size = Bout
     for (int i = 0; i < MTList_len; i++){
@@ -630,12 +620,6 @@ TangentKeyPack tangent_offline(int party_id, int Bin, int Bout, int scale, bool 
     beaver_mult_offline(party_id, AList, BList, CList, peer, MTList_len - 1);
     beaver_mult_offline(party_id, &(AList[MTList_len - 1]), &(BList[MTList_len - 1]), &(CList[MTList_len - 1]),
                         peer, 1);
-    output.AList = AList;
-    output.BList = BList;
-    output.CList = CList;
-
-    delete[] first_knots_list;
-
     return output;
 }
 
@@ -645,14 +629,14 @@ GroupElement tangent(int party_id, GroupElement input, const TangentKeyPack& key
     GroupElement x_mod = ring_extend(
         party_id, segment(input, key.scale).second, key.scale + 1,
         key.ModExtendKey);
-    GroupElement* v = new GroupElement[2];
-    containment(party_id, x_mod, v, 1, key.CtnKey);
-    GroupElement* transform_coefficients = new GroupElement[3 * 2];
+    std::array<GroupElement, 2> v;
+    containment(party_id, x_mod, v.data(), 1, key.CtnKey);
+    std::array<GroupElement, 6> transform_coefficients;
     for (int i = 0; i < 6; i++){
         transform_coefficients[i].bitsize = key.scale + 1;
     }
-    create_approx_spline(2000, key.scale + 1, key.scale, transform_coefficients);
-    set_raw_tangent_transform(transform_coefficients, key.scale + 1, key.scale);
+    create_approx_spline(2000, key.scale + 1, key.scale, transform_coefficients.data());
+    set_raw_tangent_transform(transform_coefficients.data(), key.scale + 1, key.scale);
     // Compute coefficients
     GroupElement m[3];
     const int transform_bits = key.scale + 1;
@@ -673,56 +657,50 @@ GroupElement tangent(int party_id, GroupElement input, const TangentKeyPack& key
             }
         }
     }
-    GroupElement* x_transform = new GroupElement(0, key.scale + 1);
-    beaver_mult_online(party_id, m[1], x_mod, key.AList[key.MTList_len - 1], key.BList[key.MTList_len - 1],
-                       key.CList[key.MTList_len - 1], x_transform, peer);
-    *x_transform = *x_transform + m[2];
-    GroupElement x_frac = segment(*x_transform, key.scale - 1).second;
+    GroupElement x_transform = beaver_mult_online(
+        party_id, m[1], x_mod, key.AList[key.MTList_len - 1],
+        key.BList[key.MTList_len - 1], key.CList[key.MTList_len - 1], peer);
+    x_transform = x_transform + m[2];
+    GroupElement x_frac = segment(x_transform, key.scale - 1).second;
     GroupElement y_0 = GroupElement(0, input.bitsize);
     if (key.using_lut){
         // Call digdec first
         int digdec_segNum = 1;
         const int tangent_lut_bits = key.scale - 1;
-        GroupElement* x_seg = new GroupElement[digdec_segNum];
+        std::vector<GroupElement> x_seg(digdec_segNum);
         x_seg[0] = x_frac;
         // For each segment, call lut, x_seg 0 is the lowest segment
         // Here we want the shifted_vector, so call it at once
-        GroupElement** shifted_vector_list = new GroupElement * [digdec_segNum];
-        GroupElement** publicTanList = new GroupElement * [digdec_segNum];
-        GroupElement* tan_lut_output = new GroupElement[digdec_segNum];
+        const int lut_size = 1 << tangent_lut_bits;
+        std::vector<std::vector<GroupElement>> shifted_vector_storage(
+            digdec_segNum, std::vector<GroupElement>(lut_size));
+        std::vector<std::vector<GroupElement>> publicTanStorage(
+            digdec_segNum, std::vector<GroupElement>(lut_size));
+        std::vector<GroupElement*> shifted_vector_list(digdec_segNum);
+        std::vector<GroupElement*> publicTanList(digdec_segNum);
+        std::vector<GroupElement> tan_lut_output(digdec_segNum);
         for (int i = 0; i < digdec_segNum; i++){
-            shifted_vector_list[i] = new GroupElement[1 << tangent_lut_bits];
-            publicTanList[i] = new GroupElement[1 << tangent_lut_bits];
+            shifted_vector_list[i] = shifted_vector_storage[i].data();
+            publicTanList[i] = publicTanStorage[i].data();
         }
         create_sub_lut(2, tangent_lut_bits, input.bitsize, key.scale,
-                       digdec_segNum, publicTanList);
+                       digdec_segNum, publicTanList.data());
         for (int i = 0; i < digdec_segNum; i++){
             tan_lut_output[i] = pub_lut(party_id, x_seg[i], publicTanList[i],
-                                        shifted_vector_list[i], 1 << tangent_lut_bits,
+                                        shifted_vector_list[i], lut_size,
                                         input.bitsize, key.EvalAllKeyList[i]);
         }
         y_0 = tan_lut_output[0];
-        for (int i = 0; i < digdec_segNum; i++) {
-            delete[] shifted_vector_list[i];
-            delete[] publicTanList[i];
-        }
-        delete[] shifted_vector_list;
-        delete[] publicTanList;
-        delete[] tan_lut_output;
-        delete[] x_seg;
     }else{
         y_0 = spline_poly_approx(party_id, x_frac, key.SplineApproxKey);
     }
-    beaver_mult_online(party_id, m[0], y_0, key.AList[key.MTList_len - 2],
-                       key.BList[key.MTList_len - 2],key.CList[key.MTList_len - 2],
-                       &output, peer);
+    output = beaver_mult_online(party_id, m[0], y_0,
+                                key.AList[key.MTList_len - 2],
+                                key.BList[key.MTList_len - 2],
+                                key.CList[key.MTList_len - 2], peer);
     if (!key.using_lut && key.SplineApproxKey.Bout != key.Bout) {
         output = GroupElement(output.value, key.Bout);
     }
-
-    delete[] v;
-    delete[] transform_coefficients;
-    delete x_transform;
     return output;
 }
 
@@ -735,23 +713,23 @@ ProximityKeyPack proximity_offline(int party_id, int Bin, int scale, bool using_
     output.Bout = Bin;
     output.scale = scale;
 
-    output.SineKeyList = new SineKeyPack[2];
+    output.SineKeyList = makeKeyArray<SineKeyPack>(2);
     output.SineKeyList[0] = sine_offline(party_id, Bin, Bin, scale, using_lut, digdec_new_bitsize,
                                          approx_segNum, approx_deg);
     output.SineKeyList[1] = sine_offline(party_id, Bin, Bin, scale, using_lut, digdec_new_bitsize,
                                          approx_segNum, approx_deg);
 
-    output.CosineKeyList = new CosineKeyPack[2];
+    output.CosineKeyList = makeKeyArray<CosineKeyPack>(2);
     output.CosineKeyList[0] = cosine_offline(party_id, Bin, Bin, scale, using_lut, digdec_new_bitsize,
                                              approx_segNum, approx_deg);
     output.CosineKeyList[1] = cosine_offline(party_id, Bin, Bin, scale, using_lut, digdec_new_bitsize,
                                              approx_segNum, approx_deg);
 
-    output.Alist = new GroupElement[4];
-    output.Blist = new GroupElement[4];
-    output.Clist = new GroupElement[4];
-    output.ProductTRKeyList = new TRKeyPack[4];
-    output.ProductExtendKeyList = new ComparisonKeyPack[6];
+    output.Alist = makeKeyArray<GroupElement>(4);
+    output.Blist = makeKeyArray<GroupElement>(4);
+    output.Clist = makeKeyArray<GroupElement>(4);
+    output.ProductTRKeyList = makeKeyArray<TRKeyPack>(4);
+    output.ProductExtendKeyList = makeKeyArray<ComparisonKeyPack>(6);
     const int product_bits = Bin + scale;
     for (int i = 0; i < 4; i++) {
         output.Alist[i].bitsize = product_bits;
@@ -785,9 +763,9 @@ GroupElement proximity(int party_id, GroupElement xA, GroupElement yA, GroupElem
     GroupElement _back_output_2 = sine(party_id, back_input, key.SineKeyList[1]);
 
     const int product_bits = key.Bin + scale;
-    GroupElement* mulA = new GroupElement[3];
-    GroupElement* mulB = new GroupElement[3];
-    GroupElement* batch_mul_output = new GroupElement[3];
+    std::array<GroupElement, 3> mulA;
+    std::array<GroupElement, 3> mulB;
+    std::array<GroupElement, 3> batch_mul_output;
     GroupElement front_extended = ring_extend(
         party_id, _front_output, product_bits, key.ProductExtendKeyList[0]);
     GroupElement back_cos_0_extended = ring_extend(
@@ -806,7 +784,7 @@ GroupElement proximity(int party_id, GroupElement xA, GroupElement yA, GroupElem
     for (int i = 0; i < 3; i++){
         batch_mul_output[i].bitsize = product_bits;
     }
-    beaver_mult_online(party_id, mulA, mulB, key.Alist, key.Blist, key.Clist, batch_mul_output,
+    beaver_mult_online(party_id, mulA.data(), mulB.data(), key.Alist, key.Blist, key.Clist, batch_mul_output.data(),
                        3, peer);
 
     GroupElement front_output = truncate_and_reduce(party_id, batch_mul_output[0], scale,
@@ -815,22 +793,17 @@ GroupElement proximity(int party_id, GroupElement xA, GroupElement yA, GroupElem
                                                      key.ProductTRKeyList[1]);
     GroupElement back_output_1 = truncate_and_reduce(party_id, batch_mul_output[2], scale,
                                                      key.ProductTRKeyList[2]);
-    GroupElement* back_output = new GroupElement(0, product_bits);
-    beaver_mult_online(party_id,
-                       ring_extend(party_id, back_output_0, product_bits,
-                                   key.ProductExtendKeyList[4]),
-                       ring_extend(party_id, back_output_1, product_bits,
-                                   key.ProductExtendKeyList[5]),
-                       key.Alist[3], key.Blist[3], key.Clist[3],
-                       back_output, peer);
-    GroupElement back_output_truncated = truncate_and_reduce(party_id, *back_output, scale,
+    GroupElement back_output = beaver_mult_online(
+        party_id,
+        ring_extend(party_id, back_output_0, product_bits,
+                    key.ProductExtendKeyList[4]),
+        ring_extend(party_id, back_output_1, product_bits,
+                    key.ProductExtendKeyList[5]),
+        key.Alist[3], key.Blist[3], key.Clist[3], peer);
+    GroupElement back_output_truncated = truncate_and_reduce(party_id, back_output, scale,
                                                              key.ProductTRKeyList[3]);
     GroupElement output = front_output + back_output_truncated;
 
-    delete[] mulA;
-    delete[] mulB;
-    delete[] batch_mul_output;
-    delete back_output;
     return output;
 }
 
@@ -843,7 +816,7 @@ BiometricKeyPack biometric_offline(int party_id, int Bin, int scale, bool using_
     output.scale = scale;
     output.using_lut = using_lut;
 
-    output.TangentKeyList = new TangentKeyPack[4];
+    output.TangentKeyList = makeKeyArray<TangentKeyPack>(4);
     for (int i = 0; i < 4; i++){
         output.TangentKeyList[i] = tangent_offline(party_id, Bin, Bin, scale, using_lut, approx_segNum, approx_deg);
     }

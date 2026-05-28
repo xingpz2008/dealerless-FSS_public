@@ -26,10 +26,11 @@ SOFTWARE.
 #include "comms.h"
 #include <assert.h>
 #include <iostream>
+#include <memory>
 #include <Eigen/Dense>
 #include <math.h>
 
-void MatAdd(int s1, int s2, GroupElement *A, GroupElement* B, GroupElement *C)
+void MatAdd(int s1, int s2, const GroupElement *A, const GroupElement* B, GroupElement *C)
 {
     for (int i = 0; i < s1; i++)
     {
@@ -40,7 +41,7 @@ void MatAdd(int s1, int s2, GroupElement *A, GroupElement* B, GroupElement *C)
     }
 }
 
-void MatAdd4(int s0, int s1, int s2, int s3, GroupElement* A, GroupElement* B, GroupElement* C)
+void MatAdd4(int s0, int s1, int s2, int s3, const GroupElement* A, const GroupElement* B, GroupElement* C)
 {
     for (int i = 0; i < s0; i++)
     {
@@ -57,7 +58,7 @@ void MatAdd4(int s0, int s1, int s2, int s3, GroupElement* A, GroupElement* B, G
     }
 }
 
-void MatSub(int s1, int s2, GroupElement *A, GroupElement* B, GroupElement *C)
+void MatSub(int s1, int s2, const GroupElement *A, const GroupElement* B, GroupElement *C)
 {
     for (int i = 0; i < s1; i++)
     {
@@ -68,7 +69,7 @@ void MatSub(int s1, int s2, GroupElement *A, GroupElement* B, GroupElement *C)
     }
 }
 
-void MatSub4(int s0, int s1, int s2, int s3, GroupElement* A, GroupElement* B, GroupElement* C)
+void MatSub4(int s0, int s1, int s2, int s3, const GroupElement* A, const GroupElement* B, GroupElement* C)
 {
     for (int i = 0; i < s0; i++)
     {
@@ -85,8 +86,8 @@ void MatSub4(int s0, int s1, int s2, int s3, GroupElement* A, GroupElement* B, G
     }
 }
 
-void matmul_cleartext_eigen(int dim1, int dim2, int dim3, GroupElement *inA,
-                            GroupElement *inB, GroupElement *outC) {
+void matmul_cleartext_eigen(int dim1, int dim2, int dim3, const GroupElement *inA,
+                            const GroupElement *inB, GroupElement *outC) {
   Eigen::Matrix<uint64_t, Eigen::Dynamic, Eigen::Dynamic> eigen_A(dim1, dim2);
   Eigen::Matrix<uint64_t, Eigen::Dynamic, Eigen::Dynamic> eigen_B(dim2, dim3);
   Eigen::Matrix<uint64_t, Eigen::Dynamic, Eigen::Dynamic> eigen_C(dim1, dim3);
@@ -109,12 +110,12 @@ void matmul_cleartext_eigen(int dim1, int dim2, int dim3, GroupElement *inA,
   }
 }
 
-void MatMul(int s1, int s2, int s3, GroupElement *A, GroupElement* B, GroupElement *C)
+void MatMul(int s1, int s2, int s3, const GroupElement *A, const GroupElement* B, GroupElement *C)
 {
     matmul_cleartext_eigen(s1, s2, s3, A, B, C);
 }
 
-void Conv2DReshapeFilter(int FH, int FW, int CI, int CO, GroupElement* filter, GroupElement* reshapedFilter)
+void Conv2DReshapeFilter(int FH, int FW, int CI, int CO, const GroupElement* filter, GroupElement* reshapedFilter)
 {
     for(int co = 0; co < CO; co++){
         for(int fh = 0; fh < FH; fh++){
@@ -127,7 +128,7 @@ void Conv2DReshapeFilter(int FH, int FW, int CI, int CO, GroupElement* filter, G
     }
 }
 
-void Conv2DReshapeInput(int N, int H, int W, int CI, int FH, int FW, int zPadHLeft, int zPadHRight, int zPadWLeft, int zPadWRight, int strideH, int strideW, int RRows, int RCols, GroupElement *inputArr, GroupElement *outputArr)
+void Conv2DReshapeInput(int N, int H, int W, int CI, int FH, int FW, int zPadHLeft, int zPadHRight, int zPadWLeft, int zPadWRight, int strideH, int strideW, int RRows, int RCols, const GroupElement *inputArr, GroupElement *outputArr)
 {
     int linIdxFilterMult = 0;
 	for (int n = 0; n < N; n++){
@@ -162,7 +163,7 @@ void Conv2DReshapeInput(int N, int H, int W, int CI, int FH, int FW, int zPadHLe
 	}
 }
 
-void Conv2DReshapeOutput(int N, int finalH, int finalW, int CO, GroupElement *inputArr, GroupElement *outputArr)
+void Conv2DReshapeOutput(int N, int finalH, int finalW, int CO, const GroupElement *inputArr, GroupElement *outputArr)
 {
     for (int co = 0; co < CO; ++co){
 		for (int n = 0; n < N; ++n){
@@ -179,9 +180,9 @@ void Conv2DPlaintext(int N, int H, int W, int CI,
 				   int FH, int FW, int CO, 
 				   int zPadHLeft, int zPadHRight, int zPadWLeft, int zPadWRight, 
 				   int strideH, int strideW, 
-				   GroupElement *inputArr, 
-				   GroupElement * filterArr, 
-				   GroupElement * outArr)
+                   const GroupElement *inputArr,
+                   const GroupElement * filterArr,
+                   GroupElement * outArr)
 {
     int reshapedFilterRows = CO;
 	int reshapedFilterCols = FH*FW*CI;
@@ -190,33 +191,35 @@ void Conv2DPlaintext(int N, int H, int W, int CI,
 	int newW = (((W + (zPadWLeft+zPadWRight) - FW)/strideW) + 1);
 	int reshapedIPCols = N * newH * newW;
 
-    GroupElement *filterReshaped = make_array<GroupElement>(reshapedFilterRows, reshapedFilterCols);
-	GroupElement *inputReshaped = make_array<GroupElement>(reshapedIPRows, reshapedIPCols);
-	GroupElement *matmulOP = make_array<GroupElement>(reshapedFilterRows, reshapedIPCols);
+    std::unique_ptr<GroupElement[]> filterReshapedStorage(
+        make_array<GroupElement>(reshapedFilterRows, reshapedFilterCols));
+	std::unique_ptr<GroupElement[]> inputReshapedStorage(
+        make_array<GroupElement>(reshapedIPRows, reshapedIPCols));
+	std::unique_ptr<GroupElement[]> matmulOPStorage(
+        make_array<GroupElement>(reshapedFilterRows, reshapedIPCols));
+    GroupElement* filterReshaped = filterReshapedStorage.get();
+	GroupElement* inputReshaped = inputReshapedStorage.get();
+	GroupElement* matmulOP = matmulOPStorage.get();
     
     Conv2DReshapeInput(N, H, W, CI, FH, FW, zPadHLeft, zPadHRight, zPadWLeft, zPadWRight, strideH, strideW, reshapedIPRows, reshapedIPCols, inputArr, inputReshaped);
     Conv2DReshapeFilter(FH, FW, CI, CO, filterArr, filterReshaped);
     MatMul(reshapedFilterRows, reshapedFilterCols, reshapedIPCols, filterReshaped, inputReshaped, matmulOP);
     Conv2DReshapeOutput(N, newH, newW, CO, matmulOP, outArr);
 
-    delete[] filterReshaped;
-    delete[] inputReshaped;
-    delete[] matmulOP;
-
 }
 
-void VecCopy(int s, GroupElement *input, GroupElement *output)
+void VecCopy(int s, const GroupElement *input, GroupElement *output)
 {
     for(int i = 0; i < s; i++){
         output[i].value = input[i].value;
     }
 }
 
-void MatCopy(int s1, int s2, GroupElement *input, GroupElement *output){
+void MatCopy(int s1, int s2, const GroupElement *input, GroupElement *output){
     VecCopy(s1*s2, input, output);
 }
 
-void MatCopy4(int s1, int s2, int s3, int s4, GroupElement *input, GroupElement *output){
+void MatCopy4(int s1, int s2, int s3, int s4, const GroupElement *input, GroupElement *output){
     for(int i = 0; i < s1; i++)
     {
         for(int j = 0; j < s2; j++)
@@ -501,8 +504,8 @@ int fixed_point_approx_eval_bits(int output_bits, int scale) {
     return eval_bits;
 }
 
-void matmul_eval_helper(int dim1, int dim2, int dim3, GroupElement *A,
-                            GroupElement *B, GroupElement *C, GroupElement *ka, GroupElement *kb, GroupElement *kc) {
+void matmul_eval_helper(int dim1, int dim2, int dim3, const GroupElement *A,
+                            const GroupElement *B, GroupElement *C, const GroupElement *ka, const GroupElement *kb, const GroupElement *kc) {
     Eigen::Matrix<uint64_t, Eigen::Dynamic, Eigen::Dynamic> eigen_A(dim1, dim2);
     Eigen::Matrix<uint64_t, Eigen::Dynamic, Eigen::Dynamic> eigen_ka(dim1, dim2);
     Eigen::Matrix<uint64_t, Eigen::Dynamic, Eigen::Dynamic> eigen_B(dim2, dim3);

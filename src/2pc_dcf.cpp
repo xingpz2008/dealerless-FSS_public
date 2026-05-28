@@ -104,7 +104,7 @@ void expandDcfPrgLevel(const block* levelNodes, block* nextLevelNodes,
 }
 
 iDCFKeyPack keyGeniDCF(int party_id, int Bin, int Bout,
-                      GroupElement idx, GroupElement* payload, bool masked)
+                      GroupElement idx, const GroupElement& payload, bool masked)
 {
     ensureSupportedFullTreeBits(Bin, "keyGeniDCF");
     // This is the 2pc generation of DCF Key, proceed with multiple payload
@@ -119,7 +119,7 @@ iDCFKeyPack keyGeniDCF(int party_id, int Bin, int Bout,
     // For masked iDCF, we create mask in iDCF Gen func.
     std::vector<u8> real_idx(Bin);
     u8 level_and_res = 0;
-    GroupElement* mask = new GroupElement(0, Bin);
+    auto mask = std::make_shared<GroupElement>(0, Bin);
     if (masked){
         auto rng = secure_prng();
         auto mask_s = rng.get<uint64_t>();
@@ -132,34 +132,46 @@ iDCFKeyPack keyGeniDCF(int party_id, int Bin, int Bout,
     }
 
     // Step 2: prepare payload list
-    GroupElement* real_payload = new GroupElement[Bin];
+    auto real_payload = makeKeyArray<GroupElement>(Bin);
     std::vector<GroupElement> tmp_payload(Bin);
     for (int i = 0; i < Bin; i++){
-        tmp_payload[i] = GroupElement(payload->value, payload->bitsize);
+        tmp_payload[i] = GroupElement(payload.value, payload.bitsize);
         real_payload[i].bitsize = Bout;
     }
-    multiplexer(party_id, real_idx.data(), tmp_payload.data(), real_payload, Bin, peer);
+    multiplexer(party_id, real_idx.data(), tmp_payload.data(), real_payload.data(), Bin, peer);
 
 
     // Step 3. Invoke Key Gen of iDPF
     // Here we start from real_payload[1], to use beta 2 to beta n
-    DPFKeyPack idpf_key(keyGeniDPF(party_id, Bin - 1, payload->bitsize, real_idx.data(),
+    DPFKeyPack idpf_key(keyGeniDPF(party_id, Bin - 1, payload.bitsize, real_idx.data(),
                                    &(real_payload[1]), true));
 
     // Step 4. Generate Triples. We have to generate n beaver triplets.
-    GroupElement* a = new GroupElement[Bin];
-    GroupElement* b = new GroupElement[Bin];
-    GroupElement* c = new GroupElement[Bin];
+    auto a = makeKeyArray<GroupElement>(Bin);
+    auto b = makeKeyArray<GroupElement>(Bin);
+    auto c = makeKeyArray<GroupElement>(Bin);
     for (int i = 0; i < Bin; i++){
         a[i].bitsize = Bout;
         b[i].bitsize = Bout;
         c[i].bitsize = Bout;
     }
     // call beaver triplet generation
-    beaver_mult_offline(party_id, a, b, c, peer, Bin);
+    beaver_mult_offline(party_id, a.data(), b.data(), c.data(), peer, Bin);
 
     // Free space
-    return {idpf_key.Bin, idpf_key.Bout, idpf_key.groupSize, idpf_key.k, idpf_key.g, idpf_key.v, real_payload, mask, a, b, c};
+    iDCFKeyPack key;
+    key.Bin = idpf_key.Bin;
+    key.Bout = idpf_key.Bout;
+    key.groupSize = idpf_key.groupSize;
+    key.k = idpf_key.k;
+    key.g = idpf_key.g;
+    key.v = idpf_key.v;
+    key.beta_0 = real_payload;
+    key.random_mask = mask;
+    key.a = a;
+    key.b = b;
+    key.c = c;
+    return key;
 }
 
 newDCFKeyPack keyGenNewDCF(int party_id, int Bin, int Bout, GroupElement idx, GroupElement payload){
@@ -171,11 +183,11 @@ newDCFKeyPack keyGenNewDCF(int party_id, int Bin, int Bout, GroupElement idx, Gr
     // nodes/control bits. The DCF V buffer still needs one full next layer.
     const size_t leafCapacity = size_t(1) << Bin;
     const size_t halfCapacity = (leafCapacity > 1) ? (leafCapacity / 2) : 1;
-    std::unique_ptr<block[]> largeLevelNodes(new block[leafCapacity]);
-    std::unique_ptr<block[]> smallLevelNodes(new block[halfCapacity]);
-    std::unique_ptr<block[]> thisLevelV(new block[leafCapacity]);
-    std::unique_ptr<u8[]> largeControlBits(new u8[leafCapacity]);
-    std::unique_ptr<u8[]> smallControlBits(new u8[halfCapacity]);
+    auto largeLevelNodes = std::make_unique<block[]>(leafCapacity);
+    auto smallLevelNodes = std::make_unique<block[]>(halfCapacity);
+    auto thisLevelV = std::make_unique<block[]>(leafCapacity);
+    auto largeControlBits = std::make_unique<u8[]>(leafCapacity);
+    auto smallControlBits = std::make_unique<u8[]>(halfCapacity);
     block* levelNodes = (Bin % 2 == 0) ? largeLevelNodes.get() : smallLevelNodes.get();
     block* nextLevelNodes = (Bin % 2 == 0) ? smallLevelNodes.get() : largeLevelNodes.get();
     u8* levelControlBits = (Bin % 2 == 0) ? largeControlBits.get() : smallControlBits.get();
@@ -189,9 +201,9 @@ newDCFKeyPack keyGenNewDCF(int party_id, int Bin, int Bout, GroupElement idx, Gr
 
     // The format of the final key is: s|CW_i|W_CW -> s|(s|V_CW|t|t)...|W_CW
     // lambda| n lambda | n GE |2n u8|GE
-    u8* tau = new u8[Bin * 2];
-    auto* scw = new block[Bin + 1];
-    auto* vcw = new GroupElement[Bin + 1];
+    auto tau = makeKeyArray<u8>(Bin * 2);
+    auto scw = makeKeyArray<block>(Bin + 1);
+    auto vcw = makeKeyArray<GroupElement>(Bin + 1);
     scw[0] = s[0];
     block sigma;
 
@@ -214,8 +226,7 @@ newDCFKeyPack keyGenNewDCF(int party_id, int Bin, int Bout, GroupElement idx, Gr
                           leftChildren, rightChildren);
 
         uint8_t mux_input = real_idx[i] ^ (party_id - 2);
-        multiplexer2(party_id, &mux_input, &leftChildren, &rightChildren, &sigma, (int32_t)1,
-                     peer);
+        sigma = multiplexer2(party_id, mux_input, leftChildren, rightChildren, peer);
         u8 tau_0 = lsb(leftChildren) ^ real_idx[i] ^ (u8)(party_id - 2);
         u8 tau_1 = lsb(rightChildren) ^ real_idx[i];
 
@@ -248,9 +259,9 @@ newDCFKeyPack keyGenNewDCF(int party_id, int Bin, int Bout, GroupElement idx, Gr
             }
 
             // Compute CW now (Convert)
-            two_pc_convert(Bout, &(thisLevelV[2 * j]), &convert_val, &null_block);
+            two_pc_convert(Bout, thisLevelV[2 * j], &convert_val, &null_block);
             v0 = v0 + GroupElement(convert_val, Bout);
-            two_pc_convert(Bout, &(thisLevelV[2 * j + 1]), &convert_val, &null_block);
+            two_pc_convert(Bout, thisLevelV[2 * j + 1], &convert_val, &null_block);
             v1 = v1 + GroupElement(convert_val, Bout);
 
             // Get control bit sum (prev level)
@@ -268,28 +279,24 @@ newDCFKeyPack keyGenNewDCF(int party_id, int Bin, int Bout, GroupElement idx, Gr
             phi_input_A = phi_input_A * (-1);
             phi_input_B = phi_input_B * (-1);
         }
-        GroupElement phi_output(0, Bout);
-        multiplexer2(party_id, &mux_input, &phi_input_A, &phi_input_B, &phi_output, 1, peer);
+        GroupElement phi_output = multiplexer2(party_id, mux_input, phi_input_A, phi_input_B, peer);
         GroupElement theta(0, Bout);
         theta = phi_output + (v0 + v1) * (((party_id - 2) == 0) ? 1 : (-1));
 
         // Get eta
-        GroupElement eta_output(0, Bout);
         GroupElement zero(0 ,Bout);
-        multiplexer2(party_id, &(real_idx[i]), &zero, &payload, &eta_output, 1, peer);
+        GroupElement eta_output = multiplexer2(party_id, real_idx[i], zero, payload, peer);
 
         // Set Vcw
         GroupElement v_alpha_share = v_alpha * static_cast<uint64_t>(party_id == SERVER);
         GroupElement vcw_0 = phi_output - v_alpha_share + eta_output;
         GroupElement vcw_1 = -phi_output + v_alpha_share - eta_output;
-        GroupElement vcw_output(0, Bout);
-        multiplexer2(party_id, &g, &vcw_0, &vcw_1, &vcw_output, 1, peer);
+        GroupElement vcw_output = multiplexer2(party_id, g, vcw_0, vcw_1, peer);
 
         reconstruct(&vcw_output);
         vcw[i] = vcw_output;
 
-        GroupElement g_a(0, Bout);
-        B2A(party_id, &g, &g_a, 1, Bout, peer);
+        GroupElement g_a = B2A(party_id, g, Bout, peer);
         // Inject public constants into one additive share before reconstruction.
         GroupElement public_share(static_cast<uint64_t>(party_id == SERVER), Bout);
         GroupElement v_alpha_update_share = v_alpha * public_share.value;
@@ -308,7 +315,7 @@ newDCFKeyPack keyGenNewDCF(int party_id, int Bin, int Bout, GroupElement idx, Gr
     uint64_t lastLevelSum = 0;
     for (size_t i = 0; i < leafCapacity; i++){
         uint64_t converted = 0;
-        two_pc_convert(Bout, &(levelNodes[i]), &converted, &null_block);
+        two_pc_convert(Bout, levelNodes[i], &converted, &null_block);
         lastLevelSum = lastLevelSum + converted;
         controlBitSum = controlBitSum + (uint64_t)levelControlBits[i];
     }
@@ -319,15 +326,18 @@ newDCFKeyPack keyGenNewDCF(int party_id, int Bin, int Bout, GroupElement idx, Gr
     GroupElement v_alpha_share = v_alpha * static_cast<uint64_t>(party_id == SERVER);
     GroupElement W_CW_0 = -v_alpha_share + lastLevelSum * sign;
     GroupElement W_CW_1 = v_alpha_share + lastLevelSum * (-sign);
-    auto* W_CW = new GroupElement(0, Bout);
-    multiplexer2(party_id, &t, &W_CW_0, &W_CW_1, W_CW, 1, peer);
-    reconstruct(W_CW);
+    GroupElement W_CW = multiplexer2(party_id, t, W_CW_0, W_CW_1, peer);
+    reconstruct(&W_CW);
 
-    vcw[Bin] = *W_CW;
+    vcw[Bin] = W_CW;
 
-    delete W_CW;
-
-    return {Bin, Bout, scw, vcw, tau};
+    newDCFKeyPack key;
+    key.Bin = Bin;
+    key.Bout = Bout;
+    key.k = scw;
+    key.g = vcw;
+    key.v = tau;
+    return key;
 }
 
 
@@ -363,7 +373,7 @@ void evaliDCFNext(int party, uint64_t idx, block* st_s, u8* st_t, block* cw, u8*
     // Make conversion
     uint64_t W;
 
-    two_pc_convert(y->bitsize, &nextLevelSeedTemp, &W, res_s);
+    two_pc_convert(y->bitsize, nextLevelSeedTemp, &W, res_s);
 
     // Transfer t
     *res_t = nextLevelControlBitTemp;
@@ -467,7 +477,7 @@ void evaliDCF(int party, GroupElement *res, GroupElement idx, const iDCFKeyPack&
 
 }
 
-void evaliDCF(int party, GroupElement* res, GroupElement* idx, iDCFKeyPack* keyList, int size, int max_bitsize){
+void evaliDCF(int party, GroupElement* res, const GroupElement* idx, const iDCFKeyPack* keyList, int size, int max_bitsize){
     // This is the batched implementation of masked DCF evaluation
     std::vector<int> Bin(size);
     std::vector<block> st(size);
@@ -547,7 +557,7 @@ void evaliDCF(int party, GroupElement* res, GroupElement* idx, iDCFKeyPack* keyL
 
 }
 
-void evalNewDCF(int party, GroupElement* res, GroupElement* idx, const newDCFKeyPack* keyList, int size, int max_bitsize){
+void evalNewDCF(int party, GroupElement* res, const GroupElement* idx, const newDCFKeyPack* keyList, int size, int max_bitsize){
     // Assume uniform bitsize = max_bitsize
     std::vector<int> Bin(size);
     std::vector<int> Bout(size);
@@ -588,9 +598,9 @@ void evalNewDCF(int party, GroupElement* res, GroupElement* idx, const newDCFKey
             AESInstance.setKey(levelNodes[j]);
             AESInstance.ecbEncFourBlocks(pt, &(ct[4 * j]));
             if (idx[j][i] == (u8) 0) {
-                two_pc_convert(Bout[j], &(ct[j * 4 + 2]), &(converted_val[j]), &(null_block[j]));
+                two_pc_convert(Bout[j], ct[j * 4 + 2], &(converted_val[j]), &(null_block[j]));
             } else {
-                two_pc_convert(Bout[j], &(ct[j * 4 + 3]), &(converted_val[j]), &(null_block[j]));
+                two_pc_convert(Bout[j], ct[j * 4 + 3], &(converted_val[j]), &(null_block[j]));
             }
             V[j] = V[j] +
                    (converted_val[j] + (uint64_t) controlBit[j] * g_list[j][i]) * (((party - 2) == 0) ? 1 : (-1));
@@ -607,7 +617,7 @@ void evalNewDCF(int party, GroupElement* res, GroupElement* idx, const newDCFKey
 
     // Final V calculation
     for (int i = 0; i < size; i++){
-        two_pc_convert(Bout[i], &(levelNodes[i]), &(converted_val[i]), &(null_block[i]));
+        two_pc_convert(Bout[i], levelNodes[i], &(converted_val[i]), &(null_block[i]));
         GroupElement final_term =
             (((party - 2) == 0) ? 1 : (-1)) *
             (converted_val[i] + g_list[i][Bin[i]] * (uint64_t)controlBit[i]);

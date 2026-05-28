@@ -101,7 +101,7 @@ void two_pc_convert(const int bitsize, const int groupSize, const block &b, uint
     const int bys = bytesize(bitsize);
     const int totalBys = bys * groupSize;
     if (bys * groupSize <= 16) {
-        uint8_t *bptr = (uint8_t *)&b;
+            const uint8_t *bptr = reinterpret_cast<const uint8_t *>(&b);
         for(int i = 0; i < groupSize; i++) {
             out[i] = *(uint64_t *)(bptr + i * bys);
         }
@@ -115,7 +115,7 @@ void two_pc_convert(const int bitsize, const int groupSize, const block &b, uint
             pt[i] = osuCrypto::toBlock(0, i);
         }
         aes.ecbEncBlocks(pt.data(), numblocks, ct.data());
-        uint8_t *bptr = (uint8_t *)ct.data();
+        uint8_t *bptr = reinterpret_cast<uint8_t *>(ct.data());
         for(int i = 0; i < groupSize; i++) {
             out[i] = *(uint64_t *)(bptr + i * bys);
         }
@@ -127,7 +127,7 @@ void two_pc_convert(const int bitsize, const block &b, uint64_t *out)
     const int bys = bytesize(bitsize);
     const int totalBys = bys;
     if (bys <= 16) {
-        uint8_t *bptr = (uint8_t *)&b;
+        const uint8_t *bptr = reinterpret_cast<const uint8_t *>(&b);
         *out = *(uint64_t *)(bptr);
     }
     else {
@@ -139,18 +139,18 @@ void two_pc_convert(const int bitsize, const block &b, uint64_t *out)
             pt[i] = osuCrypto::toBlock(0, i);
         }
         aes.ecbEncBlocks(pt.data(), numblocks, ct.data());
-        uint8_t *bptr = (uint8_t *)ct.data();
+        uint8_t *bptr = reinterpret_cast<uint8_t *>(ct.data());
         *out = *(uint64_t *)(bptr);
     }
 }
 
-void two_pc_convert(int bitsize, block *b, uint64_t *out, block* out_s){
+void two_pc_convert(int bitsize, const block& b, uint64_t *out, block* out_s){
     // Implementation of iDPF convert in Lightweight Techniques for Private Heavy Hitter
     const int bys = bytesize(bitsize);
     const int totalBys = bys;
 
     int numblocks = totalBys % 16 == 0 ? totalBys / 16 : (totalBys / 16) + 1;
-    const block _b = *b;
+    const block _b = b;
     AES aes(_b);
     if (numblocks == 1) {
         block pt[1] = {osuCrypto::toBlock(0, 0)};
@@ -186,10 +186,10 @@ DPFKeyPack keyGenDPF(int party_id, int Bin, int Bout,
     // the initial orientation so the final level lands in the full buffer.
     const size_t leafCapacity = size_t(1) << Bin;
     const size_t halfCapacity = (leafCapacity > 1) ? (leafCapacity / 2) : 1;
-    std::unique_ptr<block[]> largeLevelNodes(new block[leafCapacity]);
-    std::unique_ptr<block[]> smallLevelNodes(new block[halfCapacity]);
-    std::unique_ptr<u8[]> largeControlBits(new u8[leafCapacity]);
-    std::unique_ptr<u8[]> smallControlBits(new u8[halfCapacity]);
+    auto largeLevelNodes = std::make_unique<block[]>(leafCapacity);
+    auto smallLevelNodes = std::make_unique<block[]>(halfCapacity);
+    auto largeControlBits = std::make_unique<u8[]>(leafCapacity);
+    auto smallControlBits = std::make_unique<u8[]>(halfCapacity);
     block* levelNodes = (Bin % 2 == 0) ? largeLevelNodes.get() : smallLevelNodes.get();
     block* nextLevelNodes = (Bin % 2 == 0) ? smallLevelNodes.get() : largeLevelNodes.get();
     u8* levelControlBits = (Bin % 2 == 0) ? largeControlBits.get() : smallControlBits.get();
@@ -199,13 +199,13 @@ DPFKeyPack keyGenDPF(int party_id, int Bin, int Bout,
     levelControlBits[0] = (u8)(party_id-2);
 
     // Variants in this area indicates generation results -> DPFKeyPack
-    u8* tau = new u8[Bin * 2];
-    auto* scw = new block[Bin + 1];
+    auto tau = makeKeyArray<u8>(Bin * 2);
+    auto scw = makeKeyArray<block>(Bin + 1);
     scw[0] = s[0];
     block sigma;
 
     // Create mask
-    GroupElement* mask = new GroupElement(0, Bin);
+    auto mask = std::make_shared<GroupElement>(0, Bin);
     if (masked){
         auto mask_s = rng.get<uint64_t>();
         mask->value = mask_s;
@@ -237,8 +237,7 @@ DPFKeyPack keyGenDPF(int party_id, int Bin, int Bout,
         // if a[x] = 1, get s0, else get s1
         //TODO: Add and wrapper for single non-share input
         uint8_t mux_input = real_idx[i] ^ (party_id - 2);
-        multiplexer2(party_id, &mux_input, &leftChildren, &rightChildren, &sigma, (int32_t)1,
-                     peer);
+        sigma = multiplexer2(party_id, mux_input, leftChildren, rightChildren, peer);
         // Set tau, note that lsb returns <u8>
         u8 tau_0 = lsb(leftChildren) ^ real_idx[i] ^ (u8)(party_id - 2);
         u8 tau_1 = lsb(rightChildren) ^ real_idx[i];
@@ -298,21 +297,29 @@ DPFKeyPack keyGenDPF(int party_id, int Bin, int Bout,
     // Sign = -1 for p0, 1 for p1
     GroupElement W_CW_0 = payload + lastLevelSum * sign;
     GroupElement W_CW_1 = -payload + lastLevelSum * (-sign);
-    auto* W_CW = new GroupElement[1];
+    auto W_CW = makeKeyArray<GroupElement>(1);
     W_CW[0] = GroupElement(0, Bout);
 
-    multiplexer2(party_id, &t, &W_CW_0, &W_CW_1, W_CW, 1, peer);
+    W_CW[0] = multiplexer2(party_id, t, W_CW_0, W_CW_1, peer);
 
-    reconstruct(W_CW);
+    reconstruct(W_CW.data());
 
     // in DPF, swc is the seed for each level from root level, W_CW is to help convert output from Z_2 to Z_n
-    return {Bin, Bout, 1, scw, W_CW, tau, mask};
+    DPFKeyPack key;
+    key.Bin = Bin;
+    key.Bout = Bout;
+    key.groupSize = 1;
+    key.k = scw;
+    key.g = W_CW;
+    key.v = tau;
+    key.random_mask = mask;
+    return key;
 }
 
 
 
 DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
-                     GroupElement idx, GroupElement* payload, bool call_from_DCF, bool masked)
+                     GroupElement idx, const GroupElement* payload, bool call_from_DCF, bool masked)
 {
     ensureSupportedFullTreeBits(Bin, "keyGeniDPF");
     // This is the 2pc generation of iDPF Key, proceed with multiple payload
@@ -323,10 +330,10 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
     // the initial orientation so the final level lands in the full buffer.
     const size_t leafCapacity = size_t(1) << Bin;
     const size_t halfCapacity = (leafCapacity > 1) ? (leafCapacity / 2) : 1;
-    std::unique_ptr<block[]> largeLevelNodes(new block[leafCapacity]);
-    std::unique_ptr<block[]> smallLevelNodes(new block[halfCapacity]);
-    std::unique_ptr<u8[]> largeControlBits(new u8[leafCapacity]);
-    std::unique_ptr<u8[]> smallControlBits(new u8[halfCapacity]);
+    auto largeLevelNodes = std::make_unique<block[]>(leafCapacity);
+    auto smallLevelNodes = std::make_unique<block[]>(halfCapacity);
+    auto largeControlBits = std::make_unique<u8[]>(leafCapacity);
+    auto smallControlBits = std::make_unique<u8[]>(halfCapacity);
     block* levelNodes = (Bin % 2 == 0) ? largeLevelNodes.get() : smallLevelNodes.get();
     block* nextLevelNodes = (Bin % 2 == 0) ? smallLevelNodes.get() : largeLevelNodes.get();
     u8* levelControlBits = (Bin % 2 == 0) ? largeControlBits.get() : smallControlBits.get();
@@ -336,8 +343,8 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
     levelControlBits[0] = (u8)(party_id-2);
 
     // Variants in this area indicates generation results -> DPFKeyPack
-    u8* tau = new u8[Bin * 2];
-    block* scw = new block[Bin + 1];
+    auto tau = makeKeyArray<u8>(Bin * 2);
+    auto scw = makeKeyArray<block>(Bin + 1);
     scw[0] = s;
 
     std::vector<GroupElement> W_CW_0(Bin);
@@ -348,13 +355,13 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
     std::vector<uint64_t> levelSum(Bin, 0);
 
     // Variants for iDPF CW calculation
-    GroupElement* W_CW = new GroupElement[Bin];
+    auto W_CW = makeKeyArray<GroupElement>(Bin);
     for (int i = 0; i < Bin; i++){
         W_CW[i].bitsize = Bout;
     }
 
     // Preparing random mask
-    GroupElement* mask = new GroupElement(0, Bin);
+    auto mask = std::make_shared<GroupElement>(0, Bin);
     if (masked){
         auto mask_s = rng.get<uint64_t>();
         mask->value = mask_s;
@@ -396,8 +403,7 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
         // if a[x] = 1, get s0, else get s1
         uint8_t mux_input = real_idx[i] ^ (party_id-2);
         block sigma;
-        multiplexer2(party_id, &mux_input, &leftChildren, &rightChildren, &sigma,
-                     (int32_t)1, peer);
+        sigma = multiplexer2(party_id, mux_input, leftChildren, rightChildren, peer);
 
         // Set tau, note that lsb returns <u8>
         u8 tau_0 = lsb(leftChildren) ^ real_idx[i] ^ (u8)(party_id - 2);
@@ -436,7 +442,7 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
         // We also need to add all Converted elements
         for (size_t j = 0; j < 2 * expandNum; j++){
             uint64_t converted = 0;
-            two_pc_convert(Bout, &levelNodes[j], &converted, &levelNodes[j]);
+            two_pc_convert(Bout, levelNodes[j], &converted, &levelNodes[j]);
             levelSum[i] = levelSum[i] + converted;
             controlBitSum = controlBitSum + (uint64_t)levelControlBits[j];
         }
@@ -455,11 +461,19 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
     multiplexer2(party_id, t.data(), W_CW_0.data(), W_CW_1.data(), W_CW, (int32_t)Bin, peer);
     reconstruct((int32_t)Bin, W_CW, Bout);
 
-    return {Bin, Bout, 1, scw, W_CW, tau, mask};
+    DPFKeyPack key;
+    key.Bin = Bin;
+    key.Bout = Bout;
+    key.groupSize = 1;
+    key.k = scw;
+    key.g = W_CW;
+    key.v = tau;
+    key.random_mask = mask;
+    return key;
 }
 
 DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
-                      u8* idx, GroupElement* payload, bool call_from_DCF, bool masked)
+                      u8* idx, const GroupElement* payload, bool call_from_DCF, bool masked)
 {
     ensureSupportedFullTreeBits(Bin, "keyGeniDPF");
     // This is the 2pc generation of iDPF Key, proceed with multiple payload
@@ -470,10 +484,10 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
     // the initial orientation so the final level lands in the full buffer.
     const size_t leafCapacity = size_t(1) << Bin;
     const size_t halfCapacity = (leafCapacity > 1) ? (leafCapacity / 2) : 1;
-    std::unique_ptr<block[]> largeLevelNodes(new block[leafCapacity]);
-    std::unique_ptr<block[]> smallLevelNodes(new block[halfCapacity]);
-    std::unique_ptr<u8[]> largeControlBits(new u8[leafCapacity]);
-    std::unique_ptr<u8[]> smallControlBits(new u8[halfCapacity]);
+    auto largeLevelNodes = std::make_unique<block[]>(leafCapacity);
+    auto smallLevelNodes = std::make_unique<block[]>(halfCapacity);
+    auto largeControlBits = std::make_unique<u8[]>(leafCapacity);
+    auto smallControlBits = std::make_unique<u8[]>(halfCapacity);
     block* levelNodes = (Bin % 2 == 0) ? largeLevelNodes.get() : smallLevelNodes.get();
     block* nextLevelNodes = (Bin % 2 == 0) ? smallLevelNodes.get() : largeLevelNodes.get();
     u8* levelControlBits = (Bin % 2 == 0) ? largeControlBits.get() : smallControlBits.get();
@@ -483,8 +497,8 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
     levelControlBits[0] = (u8)(party_id-2);
 
     // Variants in this area indicates generation results -> DPFKeyPack
-    u8* tau = new u8[Bin * 2];
-    block* scw = new block[Bin + 1];
+    auto tau = makeKeyArray<u8>(Bin * 2);
+    auto scw = makeKeyArray<block>(Bin + 1);
     scw[0] = s;
     std::vector<GroupElement> W_CW_0(Bin);
     std::vector<GroupElement> W_CW_1(Bin);
@@ -494,14 +508,14 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
     std::vector<uint64_t> levelSum(Bin, 0);
 
     // Variants for iDPF CW calculation
-    GroupElement* W_CW = new GroupElement[Bin];
+    auto W_CW = makeKeyArray<GroupElement>(Bin);
 
     for (int i = 0; i < Bin; i++){
         W_CW[i].bitsize = Bout;
     }
 
     // Preparing random mask
-    GroupElement* mask = new GroupElement(0, Bin);
+    auto mask = std::make_shared<GroupElement>(0, Bin);
     assert(masked == false);
 
     // Step 0: prepare for the DigDec decomposition of x from msb to lsb
@@ -539,8 +553,7 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
         // if a[x] = 1, get s0, else get s1
         uint8_t mux_input = real_idx[i] ^ (party_id-2);
         block sigma;
-        multiplexer2(party_id, &mux_input, &leftChildren, &rightChildren, &sigma,
-                     (int32_t)1, peer);
+        sigma = multiplexer2(party_id, mux_input, leftChildren, rightChildren, peer);
 
         // Set tau, note that lsb returns <u8>
         u8 tau_0 = lsb(leftChildren) ^ real_idx[i] ^ (u8)(party_id - 2);
@@ -578,7 +591,7 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
         // We also need to add all Converted elements
         for (size_t j = 0; j < 2 * expandNum; j++){
             uint64_t converted = 0;
-            two_pc_convert(Bout, &levelNodes[j], &converted, &levelNodes[j]);
+            two_pc_convert(Bout, levelNodes[j], &converted, &levelNodes[j]);
             levelSum[i] = levelSum[i] + converted;
             controlBitSum = controlBitSum + (uint64_t)levelControlBits[j];
         }
@@ -598,10 +611,22 @@ DPFKeyPack keyGeniDPF(int party_id, int Bin, int Bout,
     reconstruct((int32_t)Bin, W_CW, Bout);
 
     // W_CW is returned to the caller.
-    return {Bin, Bout, 1, scw, W_CW, tau, mask};
+    DPFKeyPack key;
+    key.Bin = Bin;
+    key.Bout = Bout;
+    key.groupSize = 1;
+    key.k = scw;
+    key.g = W_CW;
+    key.v = tau;
+    key.random_mask = mask;
+    return key;
 }
 
 void evalDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &key, bool masked){
+    *res = evalDPF(party, idx, key, masked);
+}
+
+GroupElement evalDPF(int party, GroupElement idx, const DPFKeyPack &key, bool masked){
     // Eval of 2pc-dpf
     // Initialize with the root node
     osuCrypto::AES AESInstance;
@@ -649,12 +674,17 @@ void evalDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &k
     uint64_t convert_res = 0;
     two_pc_convert(Bout, levelNodes, &convert_res);
 
-    res[0] = (wcw[0] * (uint64_t) controlBit + convert_res) * sign;
-
-    return;
+    return (wcw[0] * (uint64_t) controlBit + convert_res) * sign;
 }
 
 void evaliDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &key, bool masked){
+    const std::vector<GroupElement> output = evaliDPF(party, idx, key, masked);
+    for (size_t i = 0; i < output.size(); ++i) {
+        res[i] = output[i];
+    }
+}
+
+std::vector<GroupElement> evaliDPF(int party, GroupElement idx, const DPFKeyPack &key, bool masked){
     // Eval of 2pc-dpf
     // Initialize with the root node
     // The difference between dpf and idpf are to expand CW at each level
@@ -664,6 +694,7 @@ void evaliDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &
     // in DPF, swc is the seed for each level from root level, W_CW is to help convert output from Z_2 to Z_n
     int Bin = key.Bin;
     int Bout = key.Bout;
+    std::vector<GroupElement> res(Bin);
     const block* scw = key.k;
     const GroupElement* wcw = key.g;
     const u8* tau = key.v;
@@ -700,10 +731,10 @@ void evaliDPF(int party, GroupElement *res, GroupElement idx, const DPFKeyPack &
         // At each stage, we make the convert from output in Z_2 to Z_n
         int sign = (party - 2) ? -1 : 1;
         // wrapper void two_pc_convert(const int bitsize, const block &b, uint64_t *out, block* out_s)
-        two_pc_convert(Bout, &levelNodes, &convert_res, &levelNodes);
+        two_pc_convert(Bout, levelNodes, &convert_res, &levelNodes);
         res[i] = (wcw[i] * (uint64_t) controlBit + convert_res) * sign;
     }
-    return;
+    return res;
 }
 
 void evalDPF(int party, GroupElement *res, GroupElement *idx, const DPFKeyPack *keyList, int size, int max_bitsize){
@@ -772,10 +803,10 @@ void evalAll(int party, GroupElement* res, const DPFKeyPack& key, int length){
     assert(length == key.Bin);
     const size_t leaf_num = size_t(1) << length;
     const size_t half_num = (leaf_num > 1) ? (leaf_num / 2) : 1;
-    std::unique_ptr<block[]> large_nodes(new block[leaf_num]);
-    std::unique_ptr<block[]> small_nodes(new block[half_num]);
-    std::unique_ptr<u8[]> large_control_bits(new u8[leaf_num]);
-    std::unique_ptr<u8[]> small_control_bits(new u8[half_num]);
+    auto large_nodes = std::make_unique<block[]>(leaf_num);
+    auto small_nodes = std::make_unique<block[]>(half_num);
+    auto large_control_bits = std::make_unique<u8[]>(leaf_num);
+    auto small_control_bits = std::make_unique<u8[]>(half_num);
     block* level_nodes = (length % 2 == 0) ? large_nodes.get() : small_nodes.get();
     block* next_nodes = (length % 2 == 0) ? small_nodes.get() : large_nodes.get();
     u8* control_bits = (length % 2 == 0) ? large_control_bits.get() : small_control_bits.get();

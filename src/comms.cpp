@@ -24,6 +24,8 @@ SOFTWARE.
 #include "comms.h"
 #include "api.h"
 
+#include <vector>
+
 
 Peer::Peer(std::string ip, int port) {
     std::cerr << "trying to connect with server...";
@@ -67,13 +69,13 @@ Peer::Peer(std::string ip, int port) {
         const int one = 1;
         setsockopt(sendsocket, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
     }
-    iopack_ = new sci::IOPack(party-1, port);
-    otpack = new sci::OTPack(iopack_, party-1);
-    block_ot = new sci::IKNP<sci::NetIO>(iopack_->io);
-    block_ot_reversed = new sci::IKNP<sci::NetIO>(iopack_->io_rev);
-    if (MillInstance == NULL){
+    iopack_ = std::make_unique<sci::IOPack>(party - 1, port);
+    otpack = std::make_unique<sci::OTPack>(iopack_.get(), party - 1);
+    block_ot = std::make_unique<sci::IKNP<sci::NetIO>>(iopack_->io);
+    block_ot_reversed = std::make_unique<sci::IKNP<sci::NetIO>>(iopack_->io_rev);
+    if (!MillInstance){
         // Need to reconfigure bitlen when calling
-        MillInstance = new MillionaireProtocol(party - 1, iopack_, otpack);
+        MillInstance = std::make_unique<MillionaireProtocol>(party - 1, iopack_.get(), otpack.get());
     }
     std::cerr << "connected" << "\n";
 }
@@ -225,24 +227,22 @@ void Peer::send_u8(const u8 &b){
     rounds++;
 }
 
-void Peer::send_u8(u8* b, int size){
-    GroupElement* ge_list = new GroupElement[size];
+void Peer::send_u8(const u8* b, int size){
+    std::vector<GroupElement> ge_list(size);
 
     for (int i = 0; i < size; i++){
         ge_list[i].value = b[i];
         ge_list[i].bitsize = 8;
     }
-    send_batched_input(ge_list, size, 8);
-    delete[] ge_list;
+    send_batched_input(ge_list.data(), size, 8);
 }
 
 void Peer::recv_u8(u8* output, int size){
-    uint64_t* ge_list = new uint64_t[size];
-    recv_batched_input(ge_list, size, 8);
+    std::vector<uint64_t> ge_list(size);
+    recv_batched_input(ge_list.data(), size, 8);
     for (int i = 0; i < size; i++){
         output[i] = (u8)ge_list[i];
     }
-    delete[] ge_list;
 }
 
 u8 Peer::recv_u8(){
@@ -258,24 +258,22 @@ u8 Peer::recv_u8(){
     return b;
 }
 
-void Peer::send_u64(uint64_t* input, int size) {
-    GroupElement* ge_list = new GroupElement[size];
+void Peer::send_u64(const uint64_t* input, int size) {
+    std::vector<GroupElement> ge_list(size);
 
     for (int i = 0; i < size; i++){
         ge_list[i].value = input[i];
         ge_list[i].bitsize = 64;
     }
-    send_batched_input(ge_list, size, 64);
-    delete[] ge_list;
+    send_batched_input(ge_list.data(), size, 64);
 }
 
 void Peer::recv_u64(uint64_t* output, int size){
-    uint64_t* ge_list = new uint64_t[size];
-    recv_batched_input(ge_list, size, 64);
+    std::vector<uint64_t> ge_list(size);
+    recv_batched_input(ge_list.data(), size, 64);
     for (int i = 0; i < size; i++){
         output[i] = ge_list[i];
     }
-    delete[] ge_list;
 }
 
 void Peer::send_u64(const uint64_t &b){
@@ -325,62 +323,58 @@ void Peer::send_input(const GroupElement &g) {
     send_ge(g, 64);
 }
 
-void Peer::send_batched_input(GroupElement *g, int size, int bw)
+void Peer::send_batched_input(const GroupElement *g, int size, int bw)
 {
     if (bw > 32) {
-        uint64_t *temp = new uint64_t[size];
+        std::vector<uint64_t> temp(size);
         for (int i = 0; i < size; i++) {
             temp[i] = g[i].value;
         }
-        char *buf = (char *)(temp);
+        char *buf = (char *)(temp.data());
         if (useFile) {
             this->file.write(buf, 8*size);
         } else {
             send(sendsocket, buf, 8*size, 0);
         }
-        delete[] temp;
         bytesSent += 8*size;
     }
     else if (bw > 16) {
-        uint32_t *temp = new uint32_t[size];
+        std::vector<uint32_t> temp(size);
         for (int i = 0; i < size; i++) {
             temp[i] = (uint32_t)g[i].value;
         }
-        char *buf = (char *)(temp);
+        char *buf = (char *)(temp.data());
         if (useFile) {
             this->file.write(buf, 4*size);
         } else {
             send(sendsocket, buf, 4*size, 0);
         }
-        delete[] temp;
         bytesSent += 4*size;
     }
     else if (bw > 8) {
-        uint16_t *temp = new uint16_t[size];
+        std::vector<uint16_t> temp(size);
         for (int i = 0; i < size; i++) {
             temp[i] = (uint16_t)g[i].value;
         }
-        char *buf = (char *)(temp);
+        char *buf = (char *)(temp.data());
         if (useFile) {
             this->file.write(buf, 2*size);
         } else {
             send(sendsocket, buf, 2*size, 0);
         }
-        delete[] temp;
         bytesSent += 2*size;
     }
     else {
-        uint8_t *temp = new uint8_t[size];
+        std::vector<uint8_t> temp(size);
         for (int i = 0; i < size; i++) {
             temp[i] = (uint8_t)g[i].value;
         }
-        char *buf = (char *)(temp);
+        char *buf = (char *)(temp.data());
         if (useFile) {
             this->file.write(buf, size);
         } else {
             send(sendsocket, buf, size, 0);
         }
-        delete[] temp;
         bytesSent += size;
     }
     rounds++;
@@ -397,42 +391,39 @@ void Peer::recv_batched_input(uint64_t *g, int size, int bw)
         bytesReceived += 8*size;
     }
     else if (bw > 16) {
-        uint32_t *tmp = new uint32_t[size];
+        std::vector<uint32_t> tmp(size);
         if (useFile) {
-            this->file.read((char *)tmp, 4*size);
+            this->file.read((char *)tmp.data(), 4*size);
         } else {
-            recv(recvsocket, (char *)tmp, 4*size, MSG_WAITALL);
+            recv(recvsocket, (char *)tmp.data(), 4*size, MSG_WAITALL);
         }
         for (int i = 0; i < size; i++) {
             g[i] = tmp[i];
         }
-        delete[] tmp;
         bytesReceived += 4*size;
     }
     else if (bw > 8) {
-        uint16_t *tmp = new uint16_t[size];
+        std::vector<uint16_t> tmp(size);
         if (useFile) {
-            this->file.read((char *)tmp, 2*size);
+            this->file.read((char *)tmp.data(), 2*size);
         } else {
-            recv(recvsocket, (char *)tmp, 2*size, MSG_WAITALL);
+            recv(recvsocket, (char *)tmp.data(), 2*size, MSG_WAITALL);
         }
         for (int i = 0; i < size; i++) {
             g[i] = tmp[i];
         }
-        delete[] tmp;
         bytesReceived += 2*size;
     }
     else {
-        uint8_t *tmp = new uint8_t[size];
+        std::vector<uint8_t> tmp(size);
         if (useFile) {
-            this->file.read((char *)tmp, size);
+            this->file.read((char *)tmp.data(), size);
         } else {
-            recv(recvsocket, (char *)tmp, size, MSG_WAITALL);
+            recv(recvsocket, (char *)tmp.data(), size, MSG_WAITALL);
         }
         for (int i = 0; i < size; i++) {
             g[i] = tmp[i];
         }
-        delete[] tmp;
         bytesReceived += size;
     }
     rounds++;
@@ -659,7 +650,7 @@ void Peer::send_cot(uint64_t data, uint64_t* output, int length) {
     bytesSent += (otpack->iknp_straight->io->counter - pre_comm);
 }
 
-void Peer::send_cot(GroupElement* data, GroupElement* output, int length, bool using_aux_iknp) {
+void Peer::send_cot(const GroupElement* data, GroupElement* output, int length, bool using_aux_iknp) {
     uint64_t pre_comm = 0;
     uint64_t pre_rounds = 0;
     uint64_t _output[length];
@@ -718,7 +709,7 @@ void Peer::recv_cot(GroupElement* recv_arr, int size, uint8_t* sel, bool using_a
 }
 
 void Peer::send_cot(osuCrypto::block input, osuCrypto::block* output, int size, bool using_aux_iknp){
-    auto* ot = using_aux_iknp ? block_ot_reversed : block_ot;
+    auto* ot = using_aux_iknp ? block_ot_reversed.get() : block_ot.get();
     uint64_t pre_comm = ot->io->counter;
     uint64_t pre_rounds = ot->io->num_rounds;
     ot->send_cot(output, input, size);
@@ -727,7 +718,7 @@ void Peer::send_cot(osuCrypto::block input, osuCrypto::block* output, int size, 
 }
 
 void Peer::recv_cot(osuCrypto::block* recv_arr, int size, bool* sel, bool using_aux_iknp){
-    auto* ot = using_aux_iknp ? block_ot_reversed : block_ot;
+    auto* ot = using_aux_iknp ? block_ot_reversed.get() : block_ot.get();
     uint64_t pre_comm = ot->io->counter;
     uint64_t pre_rounds = ot->io->num_rounds;
     ot->recv_cot(recv_arr, sel, size);
@@ -751,54 +742,49 @@ void Peer::mill(uint8_t *res, uint64_t *data, int num_cmps, int bitlength,
     bytesSent += (delta_com_iknp_s + delta_com_kkot);
 }
 
-void Peer::mill(uint8_t *res, uint64_t *dataA, uint64_t* dataB, int num_cmps, int bitlength,
+void Peer::mill(uint8_t *res, const uint64_t *dataA, const uint64_t* dataB, int num_cmps, int bitlength,
           bool greater_than, bool equality, int radix_base){
     // Send a-b to another one
-    uint64_t* dataC = new uint64_t[num_cmps];
+    std::vector<uint64_t> dataC(num_cmps);
     uint64_t mask = 1ULL << bitlength;
     for (int i = 0; i < num_cmps; i++){
         dataC[i] = (dataA[i] - dataB[i]) % mask;
     }
     if ((party - 2) == 0){
-        send_u64(dataC, num_cmps);
+        send_u64(dataC.data(), num_cmps);
         for (int i = 0; i < num_cmps; i++){
             dataC[i] = 0;
         }
     }else{
-        uint64_t* data_tmp = new uint64_t[num_cmps];
-        recv_u64(data_tmp, num_cmps);
+        std::vector<uint64_t> data_tmp(num_cmps);
+        recv_u64(data_tmp.data(), num_cmps);
         for (int i = 0; i < num_cmps; i++){
             dataC[i] = (dataC[i] + data_tmp[i]) % mask;
         }
-        delete[] data_tmp;
     }
-    mill(res, dataC, num_cmps, bitlength, greater_than, equality, radix_base);
-    delete[] dataC;
+    mill(res, dataC.data(), num_cmps, bitlength, greater_than, equality, radix_base);
 }
 
-void Peer::mill(uint8_t *res, GroupElement *data, int num_cmps,
+void Peer::mill(uint8_t *res, const GroupElement *data, int num_cmps,
           bool greater_than, bool equality, int radix_base){
-    uint64_t* u64data = new uint64_t[num_cmps];
+    std::vector<uint64_t> u64data(num_cmps);
     int bitlen = data->bitsize;
     for (int i = 0; i < num_cmps; i++){
         u64data[i] = data[i].value;
     }
-    mill(res, u64data, num_cmps, bitlen, greater_than, equality, radix_base);
-    delete[] u64data;
+    mill(res, u64data.data(), num_cmps, bitlen, greater_than, equality, radix_base);
 }
 
-void Peer::mill(uint8_t *res, GroupElement *dataA, GroupElement* dataB, int num_cmps,
+void Peer::mill(uint8_t *res, const GroupElement *dataA, const GroupElement* dataB, int num_cmps,
                 bool greater_than, bool equality, int radix_base){
-    uint64_t* u64dataA = new uint64_t[num_cmps];
-    uint64_t* u64dataB = new uint64_t[num_cmps];
+    std::vector<uint64_t> u64dataA(num_cmps);
+    std::vector<uint64_t> u64dataB(num_cmps);
     int bitlen = dataA->bitsize;
     for (int i = 0; i < num_cmps; i++){
         u64dataA[i] = dataA[i].value;
         u64dataB[i] = dataB[i].value;
     }
-    mill(res, u64dataA, u64dataB, num_cmps, bitlen, greater_than, equality, radix_base);
-    delete[] u64dataA;
-    delete[] u64dataB;
+    mill(res, u64dataA.data(), u64dataB.data(), num_cmps, bitlen, greater_than, equality, radix_base);
 }
 
 Dealer::Dealer(std::string ip, int port) {
@@ -915,15 +901,15 @@ DCFKeyPack Dealer::recv_dcf_keypack(int Bin, int Bout, int groupSize) {
     kp.Bout = Bout;
     kp.groupSize = groupSize;
 
-    kp.k = new block[Bin + 1];
+    kp.k = makeKeyArray<block>(Bin + 1);
     for (int i = 0; i < Bin + 1; ++i) {
         kp.k[i] = recv_block();
     }
-    kp.g = new GroupElement[groupSize];
+    kp.g = makeKeyArray<GroupElement>(groupSize);
     for (int i = 0; i < groupSize; ++i) {
         kp.g[i] = recv_ge(Bout);
     }
-    kp.v = new GroupElement[Bin * groupSize];
+    kp.v = makeKeyArray<GroupElement>(Bin * groupSize);
     for (int i = 0; i < Bin * groupSize; ++i) {
         kp.v[i] = recv_ge(Bout);
     }
@@ -936,7 +922,7 @@ DualDCFKeyPack Dealer::recv_ddcf_keypack(int Bin, int Bout, int groupSize) {
     kp.Bout = Bout;
     kp.groupSize = groupSize;
     kp.dcfKey = recv_dcf_keypack(Bin, Bout, groupSize);
-    kp.sb = new GroupElement[groupSize];
+    kp.sb = makeKeyArray<GroupElement>(groupSize);
     for (int i = 0; i < groupSize; ++i) {
         kp.sb[i] = recv_ge(Bout);
     }
@@ -1060,9 +1046,9 @@ ReluKeyPack Dealer::recv_relu_key(int Bin, int Bout) {
     ReluKeyPack kp;
     kp.Bin = Bin;
     kp.Bout = Bout;
-    kp.k = new osuCrypto::block[Bin + 1];
-    kp.g = new GroupElement[groupSize];
-    kp.v = new GroupElement[Bin * groupSize];
+    kp.k = makeKeyArray<osuCrypto::block>(Bin + 1);
+    kp.g = makeKeyArray<GroupElement>(groupSize);
+    kp.v = makeKeyArray<GroupElement>(Bin * groupSize);
     // kp.dcfKey = recv_dcf_keypack(Bin, Bout, groupSize);
     for(int i = 0; i < Bin + 1; ++i) {
         kp.k[i] = recv_block();

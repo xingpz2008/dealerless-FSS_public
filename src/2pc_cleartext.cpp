@@ -13,7 +13,10 @@
  */
 #include "2pc_cleartext.h"
 
-GroupElement inner_product(GroupElement* A, GroupElement* B, int size, int scale){
+#include <array>
+#include <vector>
+
+GroupElement inner_product(const GroupElement* A, const GroupElement* B, int size, int scale){
     GroupElement output(0, A[0].bitsize);
     for (int i = 0; i < size; i++){
         if (!(A[i].value == 0)){
@@ -51,10 +54,10 @@ GroupElement cleartext_sin(GroupElement input, int scale, bool using_lut){
             interval[3] = GroupElement(1, 2 + scale, scale);
         }
     }
-    GroupElement* trans_list = new GroupElement[12];
+    std::array<GroupElement, 12> trans_list;
     // We start with aaaa
-    create_approx_spline(0000, 2 + scale, scale, trans_list);
-    GroupElement a = inner_product(interval, trans_list, 4, scale);
+    create_approx_spline(0000, 2 + scale, scale, trans_list.data());
+    GroupElement a = inner_product(interval, trans_list.data(), 4, scale);
     GroupElement b = inner_product(interval, &(trans_list[4]), 4, scale);
     GroupElement c = inner_product(interval, &(trans_list[8]), 4, scale);
 
@@ -62,12 +65,23 @@ GroupElement cleartext_sin(GroupElement input, int scale, bool using_lut){
     GroupElement x_frac = segment(_x_frac, scale - 1).second;
 
     if (using_lut){
-        GroupElement* sin_lut[2];
-        GroupElement* cos_lut[2];
-        sin_lut[0] = new GroupElement[1 << ((scale - 1) / 2)];
-        sin_lut[1] = new GroupElement[1 << ((scale - 1) / 2)];
-        cos_lut[0] = new GroupElement[1 << ((scale - 1) / 2)];
-        cos_lut[1] = new GroupElement[1 << ((scale - 1) / 2)];
+        const int lut_size = 1 << ((scale - 1) / 2);
+        std::array<std::vector<GroupElement>, 2> sin_lut_storage = {
+            std::vector<GroupElement>(lut_size),
+            std::vector<GroupElement>(lut_size),
+        };
+        std::array<std::vector<GroupElement>, 2> cos_lut_storage = {
+            std::vector<GroupElement>(lut_size),
+            std::vector<GroupElement>(lut_size),
+        };
+        GroupElement* sin_lut[2] = {
+            sin_lut_storage[0].data(),
+            sin_lut_storage[1].data(),
+        };
+        GroupElement* cos_lut[2] = {
+            cos_lut_storage[0].data(),
+            cos_lut_storage[1].data(),
+        };
 
         create_sub_lut(0, (scale - 1), Bin, scale, 2, sin_lut);
         create_sub_lut(1, (scale - 1), Bin, scale, 2, cos_lut);
@@ -77,10 +91,10 @@ GroupElement cleartext_sin(GroupElement input, int scale, bool using_lut){
         GroupElement x_low = segment(x_frac, (scale - 1) / 2).second;
 
         // sin(x+y) = sinxcosy+cosxsiny
-        GroupElement dpf_x_high[1 << ((scale - 1) / 2)];
-        GroupElement dpf_x_low[1 << ((scale - 1) / 2)];
+        std::vector<GroupElement> dpf_x_high(lut_size);
+        std::vector<GroupElement> dpf_x_low(lut_size);
 
-        for (int i = 0; i < (1 << ((scale - 1) / 2)); i++){
+        for (int i = 0; i < lut_size; i++){
             dpf_x_high[i] = GroupElement(0, Bin);
             dpf_x_low[i] = GroupElement(0, Bin);
         }
@@ -88,25 +102,20 @@ GroupElement cleartext_sin(GroupElement input, int scale, bool using_lut){
         dpf_x_high[x_high.value] = GroupElement(1, Bin, scale);
         dpf_x_low[x_low.value] = GroupElement(1, Bin, scale);
 
-        GroupElement sin_x = inner_product(dpf_x_high, sin_lut[1], 1 << ((scale - 1) / 2), scale);
-        GroupElement cos_y = inner_product(dpf_x_low, cos_lut[0], 1 << ((scale - 1) / 2), scale);
-        GroupElement cos_x = inner_product(dpf_x_high, cos_lut[1], 1 << ((scale - 1) / 2), scale);
-        GroupElement sin_y = inner_product(dpf_x_low, sin_lut[0], 1 << ((scale - 1) / 2), scale);
+        GroupElement sin_x = inner_product(dpf_x_high.data(), sin_lut[1], lut_size, scale);
+        GroupElement cos_y = inner_product(dpf_x_low.data(), cos_lut[0], lut_size, scale);
+        GroupElement cos_x = inner_product(dpf_x_high.data(), cos_lut[1], lut_size, scale);
+        GroupElement sin_y = inner_product(dpf_x_low.data(), sin_lut[0], lut_size, scale);
 
         GroupElement tmp_res = scale_mult(sin_x, cos_y, scale) + scale_mult(cos_x, sin_y, scale);
 
         output = scale_mult(tmp_res, a, scale);
-
-        delete[] sin_lut[0];
-        delete[] sin_lut[1];
-        delete[] cos_lut[0];
-        delete[] cos_lut[1];
     }else{
         const int eval_bits = fixed_point_approx_eval_bits(Bin, scale);
         GroupElement x_tr = segment(x_frac, scale - 5).first;
-        GroupElement* coefs = new GroupElement[48];
+        std::array<GroupElement, 48> coefs;
         // Changed, scale - 1 to ell
-        create_approx_spline(216, eval_bits, scale, coefs);
+        create_approx_spline(216, eval_bits, scale, coefs.data());
         // ax2+bx+c -> ax2+(b-2ar)x+c+r2 ,def
         int r = 0;
         GroupElement mask = GroupElement(r, eval_bits, scale);
@@ -117,7 +126,7 @@ GroupElement cleartext_sin(GroupElement input, int scale, bool using_lut){
             coefs[32 + i] = coefs[32 + i] + scale_mult(mask, mask, scale);
         }
         // fecth coef
-        GroupElement* dpf_output = new GroupElement[16];
+        std::array<GroupElement, 16> dpf_output;
 
         // Note: We modify here as 1 cannot be represented in Fixed-pt Arithmetic thus cause 0 output.
         // This modification do not affect the correctness of protocol as the implementation is priLUT with l_out bitlength.
@@ -125,9 +134,9 @@ GroupElement cleartext_sin(GroupElement input, int scale, bool using_lut){
             dpf_output[i] = GroupElement(0, eval_bits);
         }
         dpf_output[x_tr.value] = GroupElement(1, eval_bits);
-        GroupElement d = inner_product(dpf_output, coefs, 16, scale);
-        GroupElement e = inner_product(dpf_output, &(coefs[16]), 16, scale);
-        GroupElement f = inner_product(dpf_output, &(coefs[32]), 16, scale);
+        GroupElement d = inner_product(dpf_output.data(), coefs.data(), 16, scale);
+        GroupElement e = inner_product(dpf_output.data(), &(coefs[16]), 16, scale);
+        GroupElement f = inner_product(dpf_output.data(), &(coefs[32]), 16, scale);
 
         GroupElement x_eval(x_frac.value, eval_bits);
         GroupElement a_eval((uint64_t)getSignedValue(a), eval_bits);
@@ -136,12 +145,7 @@ GroupElement cleartext_sin(GroupElement input, int scale, bool using_lut){
         GroupElement bx = scale_mult(e, x_eval, scale);
         GroupElement tmp_res = ax2 + bx + f;
         output = GroupElement(scale_mult(tmp_res, a_eval, scale).value, Bin);
-        delete[] coefs;
-        delete[] dpf_output;
     }
-
-
-    delete[] trans_list;
     return output;
 }
 
@@ -173,10 +177,10 @@ GroupElement cleartext_cosine(GroupElement input, int scale, bool using_lut){
             interval[3] = GroupElement(1, 2 + scale, scale);
         }
     }
-    GroupElement* trans_list = new GroupElement[12];
+    std::array<GroupElement, 12> trans_list;
     // We start with aaaa
-    create_approx_spline(1000, 2 + scale, scale, trans_list);
-    GroupElement a = inner_product(interval, trans_list, 4, scale);
+    create_approx_spline(1000, 2 + scale, scale, trans_list.data());
+    GroupElement a = inner_product(interval, trans_list.data(), 4, scale);
     GroupElement b = inner_product(interval, &(trans_list[4]), 4, scale);
     GroupElement c = inner_product(interval, &(trans_list[8]), 4, scale);
 
@@ -184,12 +188,23 @@ GroupElement cleartext_cosine(GroupElement input, int scale, bool using_lut){
     GroupElement x_frac = segment(_x_frac, scale - 1).second;
 
     if (using_lut){
-        GroupElement* sin_lut[2];
-        GroupElement* cos_lut[2];
-        sin_lut[0] = new GroupElement[1 << ((scale - 1) / 2)];
-        sin_lut[1] = new GroupElement[1 << ((scale - 1) / 2)];
-        cos_lut[0] = new GroupElement[1 << ((scale - 1) / 2)];
-        cos_lut[1] = new GroupElement[1 << ((scale - 1) / 2)];
+        const int lut_size = 1 << ((scale - 1) / 2);
+        std::array<std::vector<GroupElement>, 2> sin_lut_storage = {
+            std::vector<GroupElement>(lut_size),
+            std::vector<GroupElement>(lut_size),
+        };
+        std::array<std::vector<GroupElement>, 2> cos_lut_storage = {
+            std::vector<GroupElement>(lut_size),
+            std::vector<GroupElement>(lut_size),
+        };
+        GroupElement* sin_lut[2] = {
+            sin_lut_storage[0].data(),
+            sin_lut_storage[1].data(),
+        };
+        GroupElement* cos_lut[2] = {
+            cos_lut_storage[0].data(),
+            cos_lut_storage[1].data(),
+        };
 
         create_sub_lut(0, (scale - 1), Bin, scale, 2, sin_lut);
         create_sub_lut(1, (scale - 1), Bin, scale, 2, cos_lut);
@@ -199,10 +214,10 @@ GroupElement cleartext_cosine(GroupElement input, int scale, bool using_lut){
         GroupElement x_low = segment(x_frac, (scale - 1) / 2).second;
 
         // cos(x+y) = cosxcosy-sinxsiny
-        GroupElement dpf_x_high[1 << ((scale - 1) / 2)];
-        GroupElement dpf_x_low[1 << ((scale - 1) / 2)];
+        std::vector<GroupElement> dpf_x_high(lut_size);
+        std::vector<GroupElement> dpf_x_low(lut_size);
 
-        for (int i = 0; i < (1 << ((scale - 1) / 2)); i++){
+        for (int i = 0; i < lut_size; i++){
             dpf_x_high[i] = GroupElement(0, Bin);
             dpf_x_low[i] = GroupElement(0, Bin);
         }
@@ -210,25 +225,20 @@ GroupElement cleartext_cosine(GroupElement input, int scale, bool using_lut){
         dpf_x_high[x_high.value] = GroupElement(1, Bin, scale);
         dpf_x_low[x_low.value] = GroupElement(1, Bin, scale);
 
-        GroupElement sin_x = inner_product(dpf_x_high, sin_lut[1], 1 << ((scale - 1) / 2), scale);
-        GroupElement cos_y = inner_product(dpf_x_low, cos_lut[0], 1 << ((scale - 1) / 2), scale);
-        GroupElement cos_x = inner_product(dpf_x_high, cos_lut[1], 1 << ((scale - 1) / 2), scale);
-        GroupElement sin_y = inner_product(dpf_x_low, sin_lut[0], 1 << ((scale - 1) / 2), scale);
+        GroupElement sin_x = inner_product(dpf_x_high.data(), sin_lut[1], lut_size, scale);
+        GroupElement cos_y = inner_product(dpf_x_low.data(), cos_lut[0], lut_size, scale);
+        GroupElement cos_x = inner_product(dpf_x_high.data(), cos_lut[1], lut_size, scale);
+        GroupElement sin_y = inner_product(dpf_x_low.data(), sin_lut[0], lut_size, scale);
 
         GroupElement tmp_res = scale_mult(cos_x, cos_y, scale) - scale_mult(sin_x, sin_y, scale);
 
         output = scale_mult(tmp_res, a, scale);
-
-        delete[] sin_lut[0];
-        delete[] sin_lut[1];
-        delete[] cos_lut[0];
-        delete[] cos_lut[1];
     }else{
         const int eval_bits = fixed_point_approx_eval_bits(Bin, scale);
         GroupElement x_tr = segment(x_frac, scale - 5).first;
-        GroupElement* coefs = new GroupElement[48];
+        std::array<GroupElement, 48> coefs;
         // Changed, scale - 1 to ell
-        create_approx_spline(1216, eval_bits, scale, coefs);
+        create_approx_spline(1216, eval_bits, scale, coefs.data());
         // ax2+bx+c -> ax2+(b-2ar)x+c+r2 ,def
         int r = 0;
         GroupElement mask = GroupElement(r, eval_bits, scale);
@@ -247,7 +257,7 @@ GroupElement cleartext_cosine(GroupElement input, int scale, bool using_lut){
             dpf_output[i] = GroupElement(0, eval_bits);
         }
         dpf_output[x_tr.value] = GroupElement(1, eval_bits);
-        GroupElement d = inner_product(dpf_output, coefs, 16, scale);
+        GroupElement d = inner_product(dpf_output, coefs.data(), 16, scale);
         GroupElement e = inner_product(dpf_output, &(coefs[16]), 16, scale);
         GroupElement f = inner_product(dpf_output, &(coefs[32]), 16, scale);
 
@@ -258,11 +268,7 @@ GroupElement cleartext_cosine(GroupElement input, int scale, bool using_lut){
         GroupElement bx = scale_mult(e, x_eval, scale);
         GroupElement tmp_res = ax2 + bx + f;
         output = GroupElement(scale_mult(tmp_res, a_eval, scale).value, Bin);
-        delete[] coefs;
     }
-
-
-    delete[] trans_list;
     return output;
 }
 
@@ -285,31 +291,30 @@ GroupElement cleartext_tangent(GroupElement input, int scale, bool using_lut){
     GroupElement x_frac = segment(_x_frac, scale - 1).second;
 
     if (using_lut){
-        GroupElement* tan_lut[1];
-        tan_lut[0] = new GroupElement[1 << (scale - 1)];
+        const int lut_size = 1 << (scale - 1);
+        std::vector<GroupElement> tan_lut_storage(lut_size);
+        GroupElement* tan_lut[1] = {tan_lut_storage.data()};
 
         create_sub_lut(2, (scale - 1), Bin, scale, 1, tan_lut);
 
         // fetch value
-        GroupElement dpf_x[1 << ((scale - 1))];
+        std::vector<GroupElement> dpf_x(lut_size);
 
-        for (int i = 0; i < (1 << ((scale - 1))); i++){
+        for (int i = 0; i < lut_size; i++){
             dpf_x[i] = GroupElement(0, Bin);
         }
 
         dpf_x[x_frac.value] = GroupElement(1, Bin, scale);
 
-        GroupElement tan_x = inner_product(dpf_x, tan_lut[0],  1 << ((scale - 1)), scale);
+        GroupElement tan_x = inner_product(dpf_x.data(), tan_lut[0], lut_size, scale);
 
         output = scale_mult(tan_x, a, scale);
-
-        delete[] tan_lut[0];
     }else{
         const int eval_bits = fixed_point_approx_eval_bits(Bin, scale);
         GroupElement x_tr = segment(x_frac, scale - 5).first;
-        GroupElement* coefs = new GroupElement[48];
+        std::array<GroupElement, 48> coefs;
         // Changed, scale - 1 to ell
-        create_approx_spline(2216, eval_bits, scale, coefs);
+        create_approx_spline(2216, eval_bits, scale, coefs.data());
         // ax2+bx+c -> ax2+(b-2ar)x+c+r2 ,def
         int r = 0;
         GroupElement mask = GroupElement(r, eval_bits, scale);
@@ -327,7 +332,7 @@ GroupElement cleartext_tangent(GroupElement input, int scale, bool using_lut){
             dpf_output[i] = GroupElement(0, eval_bits);
         }
         dpf_output[x_tr.value] = GroupElement(1, eval_bits);
-        GroupElement d = inner_product(dpf_output, coefs, 16, scale);
+        GroupElement d = inner_product(dpf_output, coefs.data(), 16, scale);
         GroupElement e = inner_product(dpf_output, &(coefs[16]), 16, scale);
         GroupElement f = inner_product(dpf_output, &(coefs[32]), 16, scale);
 
@@ -338,7 +343,6 @@ GroupElement cleartext_tangent(GroupElement input, int scale, bool using_lut){
         GroupElement bx = scale_mult(e, x_eval, scale);
         GroupElement tmp_res = ax2 + bx + f;
         output = GroupElement(scale_mult(tmp_res, a_eval, scale).value, Bin);
-        delete[] coefs;
     }
     return output;
 }
