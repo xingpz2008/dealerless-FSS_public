@@ -11,41 +11,31 @@ the input bit length during FSS evaluation.
 
 ## What's New
 
-- Fixed DCF-based comparison handling for arithmetic-shared inputs and payloads.
-- Fixed truncate-and-reduce carry handling for split additive shares.
-- Fixed interval containment endpoint handling and reduced its online
-  multiplication work.
-- Fixed spline and trigonometric evaluation issues caused by ring-width changes
-  in fixed-point arithmetic.
-- Fixed sine, cosine, and tangent correctness over representative in-domain,
-  wrapped, and signed fixed-point inputs.
-- Added DCF-based ring extension for widening additive shares during online
-  evaluation.
-- Added public correctness checks covering FSS primitives, building blocks,
-  trigonometric functions, and case-study helpers.
-- Added `scripts/run_correctness.sh` for one-command local correctness
-  validation.
-- Updated the build flow to configure dealerless FSS against a local EzPC
-  checkout through CMake.
-- Improved macOS build support for the SCI/FSS dependency stack.
-- Improved DPF/DCF high-bit stability by removing large stack temporaries,
-  reducing tree-buffer copies, and adding explicit guards for impractical
-  full-domain bit lengths.
-- Added thresholded PRG-only parallel expansion for DPF/iDPF and DCF key
-  generation, plus parallel full-domain DPF evaluation.
-- Replaced time-seeded randomness in dealerless offline paths with
-  `sysRandomSeed()`-backed PRNG draws.
-- Modernized keypack ownership and read-only online APIs to reduce manual
-  memory-management risks while preserving cheap key copies.
-- Added `2pc_test/SAFETY_TEST` and `scripts/run_safety_perf.sh` for
-  high-depth safety and performance stress checks.
+- Reorganized the code into separate CMake targets: `dfss_common`, `dfss`, and
+  `dfss_legacy`.
+- Isolated old NDSS-compatible code under `src/legacy` while keeping new dFSS
+  primitives and building blocks under `src/fss`, `src/buildingblock`, and
+  `src/math`.
+- Added explicit correctness targets and scripts for dFSS protocols, helper
+  primitives, and legacy compatibility tests.
+- Added a dFSS benchmark driver with explicit CLI parameters and separate
+  protocol/microbenchmark implementations.
+- Added generic public-LUT and MIC-based piecewise-polynomial evaluation
+  support for the new dFSS library.
+- Kept legacy trigonometric and case-study drivers available as isolated
+  compatibility/baseline code.
 
 ## Contents
 This repository consists of the following parts:
-- __src__: Implementations for the 2PC FSS scheme and case-study helpers.
-- __2pc_test__: Example programs, performance drivers, and correctness checks.
-- __scripts__: Build and validation helpers for a local checkout.
-- __docs__: Developer usage guide and public development notes.
+- __src__: New dFSS library code plus isolated legacy compatibility/baseline
+  code.
+- __test__: dFSS correctness tests and dFSS benchmark drivers.
+- __scripts__: Build, correctness, benchmark, and validation helpers for a
+  local checkout.
+- __tools__: Public-data generation and polynomial-fitting helpers for nonlinear
+  evaluation experiments. See `tools/nonlinear/*.py` and `tools/polyfit/*.py`
+  for public LUT/polynomial material generation and semantic checks.
+- __docs__: Public developer usage guide and documentation index.
 
 ## Installation
 The implementation builds against a local [EzPC](https://github.com/mpc-msri/EzPC)
@@ -66,6 +56,12 @@ cd EzPC
 eval `opam env`
 make
 cd ../..
+```
+
+On macOS, install OpenMP before configuring dealerless FSS:
+
+```bash
+brew install libomp
 ```
 
 3. Clone and configure dealerless FSS.
@@ -109,9 +105,9 @@ For sibling checkouts, this is enough:
 scripts/run_correctness.sh
 ```
 
-The helper configures CMake, builds `CORRECTNESS_TEST`, runs both 2PC parties on
-localhost, and stores logs under `build/correctness-logs/`. A successful run
-prints:
+The helper configures CMake, builds `DFSS_CORRECTNESS_TEST`, runs both 2PC
+parties on localhost, and stores logs under `build/correctness-logs/`. A
+successful run prints:
 
 ```text
 Correctness checks: PASS
@@ -120,37 +116,21 @@ Correctness checks: PASS
 Useful options:
 
 ```bash
-scripts/run_correctness.sh --case 12       # trigonometric functions
-scripts/run_correctness.sh --case 5        # truncation
+scripts/run_correctness.sh --suite dfss --case 12      # dFSS comparison
+scripts/run_correctness.sh --suite dfss --case 16      # MIC PolyEval
+scripts/run_correctness.sh --suite helper --case 3     # OHG helper
+src/legacy/scripts/run_legacy_correctness.sh --case 11 # legacy trigonometric functions
 scripts/run_correctness.sh --build-dir /tmp/dealerless-fss-build
-scripts/run_correctness.sh --skip-build    # reuse an existing build
-```
-
-### Safety and Performance Stress Check
-
-Run the safety/performance helper from the repository root:
-
-```bash
-scripts/run_safety_perf.sh
-```
-
-The helper builds and runs `SAFETY_PERF_TEST`, which checks high-depth DPF and
-DCF generation/evaluation, DPF full-domain evaluation, and batched DCF
-evaluation while reporting timing totals. Useful options:
-
-```bash
-scripts/run_safety_perf.sh --bits 19 --repeat 5
-scripts/run_safety_perf.sh --dcf-batch 512 --eval-all-bits 14
-scripts/run_safety_perf.sh --skip-configure --skip-build
+scripts/run_correctness.sh --skip-configure --skip-build    # reuse an existing build
 ```
 
 ## Usage
 For developer-facing usage, integration notes, key lifetime rules, and extension
 guidelines, see [`docs/developer-usage.md`](docs/developer-usage.md).
 
-The examples in `2pc_test` expose the protocol wrappers directly. They can also
-be used as reference code for integrating the FSS routines into post-compiled
-EzPC/Athos workflows.
+The examples in `test` and `src/legacy/benchmark` expose the protocol wrappers
+directly. They can also be used as reference code for integrating the FSS
+routines into post-compiled EzPC/Athos workflows.
 
 ## Disclaimer
 This repository is a proof-of-concept prototype.

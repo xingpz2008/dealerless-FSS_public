@@ -28,32 +28,35 @@ set(DEALERLESS_FSS_OVERLAY_SRC "${CMAKE_CURRENT_BINARY_DIR}/fss-overlay-src")
 # include semantics while EzPC remains an external dependency.
 file(COPY "${DEALERLESS_EZPC_FSS_SRC}/"
     DESTINATION "${DEALERLESS_FSS_OVERLAY_SRC}")
-set(DEALERLESS_OVERLAY_FILES
-    2pc_api.cpp
-    2pc_api.h
-    2pc_cleartext.cpp
-    2pc_cleartext.h
-    2pc_dcf.cpp
-    2pc_dcf.h
-    2pc_idpf.cpp
-    2pc_idpf.h
-    2pc_math.cpp
-    2pc_math.h
-    2pcwrapper.cpp
-    2pcwrapper.h
-    api.cpp
-    api.h
-    comms.cpp
-    comms.h
-    group_element.h
-    keypack.h
-    utils.cpp
-    utils.h)
-foreach(_dealerless_overlay_file IN LISTS DEALERLESS_OVERLAY_FILES)
+set(DEALERLESS_OVERLAY_FILE_MAP
+    "mpc/api.cpp|api.cpp"
+    "mpc/comms.cpp|comms.cpp"
+    "commons/public_data.cpp|public_data.cpp"
+    "commons/utils.cpp|utils.cpp")
+foreach(_dealerless_overlay_mapping IN LISTS DEALERLESS_OVERLAY_FILE_MAP)
+    string(REPLACE "|" ";" _dealerless_overlay_pair
+        "${_dealerless_overlay_mapping}")
+    list(GET _dealerless_overlay_pair 0 _dealerless_overlay_src)
+    list(GET _dealerless_overlay_pair 1 _dealerless_overlay_dst)
     configure_file(
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/${_dealerless_overlay_file}"
-        "${DEALERLESS_FSS_OVERLAY_SRC}/${_dealerless_overlay_file}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/${_dealerless_overlay_src}"
+        "${DEALERLESS_FSS_OVERLAY_SRC}/${_dealerless_overlay_dst}"
         COPYONLY)
+endforeach()
+set(DEALERLESS_ROOT_HEADER_ALIASES
+    "commons/keypack.h|keypack.h"
+    "commons/utils.h|utils.h")
+foreach(_dealerless_header_alias IN LISTS DEALERLESS_ROOT_HEADER_ALIASES)
+    string(REPLACE "|" ";" _dealerless_header_alias_pair
+        "${_dealerless_header_alias}")
+    list(GET _dealerless_header_alias_pair 0 _dealerless_header_target)
+    list(GET _dealerless_header_alias_pair 1 _dealerless_header_name)
+    file(WRITE "${DEALERLESS_FSS_OVERLAY_SRC}/${_dealerless_header_name}"
+        "#pragma once\n#include \"${_dealerless_header_target}\"\n")
+endforeach()
+foreach(_dealerless_overlay_dir IN ITEMS commons fss buildingblock math legacy mpc)
+    file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/src/${_dealerless_overlay_dir}"
+        DESTINATION "${DEALERLESS_FSS_OVERLAY_SRC}")
 endforeach()
 
 find_package(Threads REQUIRED)
@@ -112,70 +115,80 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|i[3-6]86")
         -mavx2)
 endif()
 
-add_library(dealerless_fss STATIC
+function(dfss_apply_compile_options target_name)
+    target_compile_features(${target_name} PUBLIC cxx_std_17)
+    target_compile_options(${target_name} PRIVATE
+        -Wno-parentheses-equality
+        -Wno-ignored-attributes
+        -fPIC)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        target_compile_options(${target_name} PUBLIC
+            -Wno-unknown-attributes)
+    endif()
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|i[3-6]86")
+        target_compile_options(${target_name} PRIVATE
+            -march=native
+            -maes
+            -msse2
+            -msse4.1
+            -mpclmul)
+    endif()
+endfunction()
+
+add_library(dfss_common STATIC
     "${DEALERLESS_FSS_OVERLAY_SRC}/api.cpp"
     "${DEALERLESS_FSS_OVERLAY_SRC}/comms.cpp"
     "${DEALERLESS_FSS_OVERLAY_SRC}/utils.cpp"
-    "${DEALERLESS_FSS_OVERLAY_SRC}/2pc_api.cpp"
-    "${DEALERLESS_FSS_OVERLAY_SRC}/2pc_cleartext.cpp"
-    "${DEALERLESS_FSS_OVERLAY_SRC}/2pc_dcf.cpp"
-    "${DEALERLESS_FSS_OVERLAY_SRC}/2pc_idpf.cpp"
-    "${DEALERLESS_FSS_OVERLAY_SRC}/2pc_math.cpp"
-    "${DEALERLESS_FSS_OVERLAY_SRC}/2pcwrapper.cpp"
-    "${DEALERLESS_FSS_OVERLAY_SRC}/api_varied.cpp"
-    "${DEALERLESS_FSS_OVERLAY_SRC}/lib.cpp"
-    "${DEALERLESS_FSS_OVERLAY_SRC}/prng.cpp"
-    "${DEALERLESS_FSS_OVERLAY_SRC}/dcf.cpp"
-    "${DEALERLESS_FSS_OVERLAY_SRC}/add.cpp"
-    "${DEALERLESS_FSS_OVERLAY_SRC}/mult.cpp"
-    "${DEALERLESS_FSS_OVERLAY_SRC}/conv.cpp"
-    "${DEALERLESS_FSS_OVERLAY_SRC}/pubdiv.cpp"
-    "${DEALERLESS_FSS_OVERLAY_SRC}/spline.cpp"
-    "${DEALERLESS_FSS_OVERLAY_SRC}/input_prng.cpp"
+    "${DEALERLESS_FSS_OVERLAY_SRC}/mpc/secure_ops.cpp"
+    "${DEALERLESS_FSS_OVERLAY_SRC}/public_data.cpp"
     "${DEALERLESS_FSS_OVERLAY_SRC}/deps/cryptoTools/cryptoTools/Common/Defines.cpp"
     "${DEALERLESS_FSS_OVERLAY_SRC}/deps/cryptoTools/cryptoTools/Common/Log.cpp"
     "${DEALERLESS_FSS_OVERLAY_SRC}/deps/cryptoTools/cryptoTools/Crypto/AES.cpp"
     "${DEALERLESS_FSS_OVERLAY_SRC}/deps/cryptoTools/cryptoTools/Crypto/PRNG.cpp"
 )
 
-target_compile_features(dealerless_fss PUBLIC cxx_std_17)
-target_compile_options(dealerless_fss PRIVATE
-    -Wno-parentheses-equality
-    -Wno-ignored-attributes
-    -fPIC)
-if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    target_compile_options(dealerless_fss PUBLIC
-        -Wno-unknown-attributes)
-endif()
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|i[3-6]86")
-    target_compile_options(dealerless_fss PRIVATE
-        -march=native
-        -maes
-        -msse2
-        -msse4.1
-        -mpclmul)
-endif()
+dfss_apply_compile_options(dfss_common)
 
-target_include_directories(dealerless_fss
+target_include_directories(dfss_common
     PUBLIC
     "$<BUILD_INTERFACE:${DEALERLESS_FSS_OVERLAY_SRC}>"
     "$<BUILD_INTERFACE:${DEALERLESS_FSS_OVERLAY_SRC}/deps/cryptoTools>"
     "$<BUILD_INTERFACE:${DEALERLESS_EZPC_SCI_SRC}>")
 
-target_link_libraries(dealerless_fss
+target_link_libraries(dfss_common
     PUBLIC
     Eigen3::Eigen
     dealerless_sci_headers
     Threads::Threads)
 if(OpenMP_CXX_FOUND)
-    target_link_libraries(dealerless_fss PUBLIC OpenMP::OpenMP_CXX)
+    target_link_libraries(dfss_common PUBLIC OpenMP::OpenMP_CXX)
 endif()
 
+add_library(dfss STATIC
+    "${DEALERLESS_FSS_OVERLAY_SRC}/fss/dpf.cpp"
+    "${DEALERLESS_FSS_OVERLAY_SRC}/fss/idpf.cpp"
+    "${DEALERLESS_FSS_OVERLAY_SRC}/fss/fss_wrapper.cpp"
+    "${DEALERLESS_FSS_OVERLAY_SRC}/fss/internal/ggm.cpp"
+    "${DEALERLESS_FSS_OVERLAY_SRC}/fss/internal/correlated_ggm.cpp"
+    "${DEALERLESS_FSS_OVERLAY_SRC}/fss/internal/payload_conversion.cpp"
+    "${DEALERLESS_FSS_OVERLAY_SRC}/buildingblock/comparison.cpp"
+    "${DEALERLESS_FSS_OVERLAY_SRC}/buildingblock/digit_decomposition.cpp"
+    "${DEALERLESS_FSS_OVERLAY_SRC}/buildingblock/equality.cpp"
+    "${DEALERLESS_FSS_OVERLAY_SRC}/buildingblock/lut.cpp"
+    "${DEALERLESS_FSS_OVERLAY_SRC}/buildingblock/mic.cpp"
+    "${DEALERLESS_FSS_OVERLAY_SRC}/buildingblock/modular.cpp"
+    "${DEALERLESS_FSS_OVERLAY_SRC}/buildingblock/ring_extension.cpp"
+    "${DEALERLESS_FSS_OVERLAY_SRC}/buildingblock/truncation.cpp"
+    "${DEALERLESS_FSS_OVERLAY_SRC}/math/luteval.cpp"
+    "${DEALERLESS_FSS_OVERLAY_SRC}/math/polyeval.cpp"
+)
+
+dfss_apply_compile_options(dfss)
+target_link_libraries(dfss PUBLIC dfss_common)
+
+add_subdirectory(src/legacy)
+
 if(DEALERLESS_BUILD_TESTS)
-    add_subdirectory(2pc_test/GEN_TEST)
-    add_subdirectory(2pc_test/BB_TEST)
-    add_subdirectory(2pc_test/TRI_TEST)
-    add_subdirectory(2pc_test/CASE_STUDIES)
-    add_subdirectory(2pc_test/CORRECTNESS_TEST)
-    add_subdirectory(2pc_test/SAFETY_TEST)
+    add_subdirectory(test/correctness)
+    add_subdirectory(test/benchmark)
 endif()

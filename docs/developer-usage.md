@@ -24,19 +24,26 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
 ```
 
-The CMake target exported inside this source tree is `dealerless_fss`. A small
-local test or downstream example can link it as follows:
+This source tree exports three CMake targets:
+
+- `dfss_common`: shared runtime, communication, common types, and low-level MPC helpers.
+- `dfss`: the new dFSS primitives, building blocks, and math layer.
+- `dfss_legacy`: old NDSS/EzPC-compatible code kept for baseline and compatibility tests.
+
+A small local test or downstream example that uses the new dFSS APIs should
+link `dfss`:
 
 ```cmake
 set(DEALERLESS_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 add_subdirectory(/path/to/dealerless-FSS_public dealerless-fss)
 
 add_executable(my_protocol my_protocol.cpp)
-target_link_libraries(my_protocol PRIVATE dealerless_fss)
+target_link_libraries(my_protocol PRIVATE dfss)
 ```
 
-`dealerless_fss` exposes the dealerless headers, the EzPC FSS overlay headers,
-SCI headers, cryptoTools headers, and required link libraries through CMake.
+`dfss` brings in `dfss_common` transitively. Link `dfss_common` directly only
+for helper/runtime tests that do not call FSS or building-block APIs. Link
+`dfss_legacy` only for the isolated legacy baselines.
 
 ## Runtime Model
 
@@ -59,13 +66,15 @@ The public tests define the process-wide runtime variables expected by the
 imported EzPC/FSS compatibility layer:
 
 ```cpp
-#include "2pc_api.h"
-#include "2pc_dcf.h"
-#include "2pc_idpf.h"
+#include "buildingblock/comparison.h"
+#include "buildingblock/lut.h"
+#include "legacy/dcf.h"
+#include "legacy/dpf.h"
 #include "ArgMapping.h"
-#include "comms.h"
+#include "mpc/comms.h"
 
 using namespace sci;
+using namespace dfss;
 
 int party_instance = 0;
 int party = 0;
@@ -100,8 +109,8 @@ if (party == SERVER) {
 }
 ```
 
-The examples in `2pc_test` are the best reference for complete `main`
-functions, argument parsing, and cleanup.
+The examples in `test` and `src/legacy/benchmark` are the best reference for
+complete `main` functions, argument parsing, and cleanup.
 
 ## Sharing Conventions
 
@@ -130,13 +139,14 @@ The public surface is split into a few practical layers:
 
 | Layer | Headers | Typical use |
 | --- | --- | --- |
-| FSS primitives | `2pc_idpf.h`, `2pc_dcf.h` | DPF/DCF key generation and evaluation. |
-| Building blocks | `2pc_api.h` | Comparison, ring extension, truncation, containment, LUT, spline approximation. |
-| Math helpers | `2pc_math.h` | Trigonometric and case-study math helpers. |
-| Low-level wrappers | `2pcwrapper.h`, `comms.h` | OT-backed mux, bit operations, Beaver multiplication, peer communication. |
+| Legacy FSS primitives | `legacy/dpf.h`, `legacy/dcf.h` | Legacy DPF/DCF key generation and evaluation. |
+| Building blocks | `buildingblock/*.h` | Comparison, ring extension, truncation, equality, MIC, and LUT. |
+| New math | `math/*.h` | Generic LUT evaluation and MIC-based polynomial evaluation. |
+| Legacy math helpers | `legacy/math.h` | Trigonometric and case-study math helpers. |
+| Low-level wrappers | `mpc/secure_ops.h`, `comms.h` | OT-backed mux, bit operations, Beaver multiplication, peer communication. |
 
-For new protocol code, prefer the building-block APIs in `2pc_api.h` unless you
-are changing a primitive or implementing a new building block.
+For new protocol code, include the header from the layer that owns the
+function. Avoid adding a central compatibility entry point.
 
 ## Protocol Summary
 
@@ -144,31 +154,32 @@ The implementation covers the following protocol families:
 
 | Protocol | Public entry points | Header | Notes |
 | --- | --- | --- | --- |
-| Constraint comparison | `cmp_2bit_opt` | `2pcwrapper.h` | Low-level 2-bit comparison helper used by higher-level code. |
-| Dealerless DPF | `keyGenDPF`, `evalDPF`, `evalAll` | `2pc_idpf.h` | Scalar, batch, and full-domain evaluation are available. |
-| Dealerless DCF | `keyGenNewDCF`, `evalNewDCF` | `2pc_dcf.h` | `evalNewDCF` is batch-oriented by default. |
-| DPF equality test | `keyGenDPF`, `evalDPF` with `masked=true` | `2pc_idpf.h` | Uses the masked DPF path. |
-| DCF comparison | `comparison_offline`, `comparison` | `2pc_api.h` | Scalar and batch online overloads are available. |
-| Ring extension | `ring_extend_offline`, `ring_extend` | `2pc_api.h` | Preferred over the deprecated direct `zero_extend` helper. |
-| Modular reduction | `modular_offline`, `modular` | `2pc_api.h` | Intended for reducing an input known to be smaller than `2N`. |
-| Truncate and reduce | `truncate_and_reduce_offline`, `truncate_and_reduce` | `2pc_api.h` | Truncates by `s` bits and adjusts the ring size. |
-| Secure containment | `containment_offline`, `containment_offline_public`, `containment` | `2pc_api.h` | Produces interval-indicator outputs for ordered knots. |
-| Digit decomposition | `digdec_offline`, `digdec` | `2pc_api.h` | Splits an input into fixed-width digit shares. |
-| Public LUT | `pub_lut_offline`, `pub_lut` | `2pc_api.h` | Table is public; lookup index is shared. |
-| Private LUT | `pri_lut_offline`, `pri_lut` | `2pc_api.h` | Table entries are shared/private. |
-| Spline approximation | `spline_poly_approx_offline`, `spline_poly_approx` | `2pc_api.h` | Uses public coefficients and shared input. |
-| Trigonometric functions | `sine`, `cosine`, `tangent` and offline variants | `2pc_math.h` | Supports LUT and spline-approximation modes. |
-| Case studies | `proximity`, `biometric` and offline variants | `2pc_math.h` | Built on the trigonometric framework. |
+| Constraint comparison | `cmp_2bit_opt` | `mpc/secure_ops.h` | Low-level 2-bit comparison helper used by higher-level code. |
+| Legacy dealerless DPF | `keyGenDPF`, `evalDPF`, `evalAll` | `legacy/dpf.h` | Scalar, batch, and full-domain evaluation are available. |
+| Legacy dealerless DCF | `keyGenNewDCF`, `evalNewDCF` | `legacy/dcf.h` | `evalNewDCF` is batch-oriented by default. |
+| Legacy DCF comparison | `legacyComparisonOffline`, `legacyComparison` | `legacy/comparison.h` | Baseline only. |
+| Equality | `equalityOffline`, `equality`, `equalityBit`, `equalityBlock` | `buildingblock/equality.h` | Wrapper over correlated DPF. |
+| Comparison | `comparisonOffline`, `comparison`, `comparisonBit` | `buildingblock/comparison.h` | New dFSS comparison. |
+| Ring extension | `ringExtendOffline`, `ringExtend` | `buildingblock/comparison.h` | Uses the new comparison path. |
+| Modular reduction | `modularOffline`, `modular` | `buildingblock/modular.h` | Intended for reducing an input known to be smaller than `2N`. |
+| Truncation | `truncateOffline`, `truncate` | `buildingblock/truncation.h` | Truncates by `s` bits and adjusts the ring size. |
+| Legacy containment | `containmentOffline`, `containmentOfflinePublic`, `containment` | `legacy/containment.h` | Baseline/compatibility interval containment. Do not include it from new dFSS code. |
+| Digit decomposition | `digdecOffline`, `digdec` | `buildingblock/digit_decomposition.h` | Splits an input into fixed-width digit shares. |
+| Public LUT | `publicLutOffline`, `publicLut` | `buildingblock/lut.h` | Table is public; lookup index is shared. |
+| Private LUT | `privateLutOffline`, `privateLut` | `buildingblock/lut.h` | Table entries are shared/private. |
+| Legacy spline approximation | `splinePolyApproxOffline`, `splinePolyApprox` | `legacy/spline_approx.h` | Baseline only. |
+| Legacy trigonometric functions | `sine`, `cosine`, `tangent` and offline variants | `legacy/math.h` | Supports LUT and spline-approximation modes. |
+| Legacy case studies | `proximity`, `biometric` and offline variants | `legacy/math.h` | Built on the trigonometric framework. |
 
-The deprecated legacy `iDCF` functions remain in the headers for compatibility,
-but new correctness-sensitive code should use `keyGenNewDCF` and `evalNewDCF`.
+The legacy DCF header exposes `keyGenNewDCF` and `evalNewDCF`; new
+correctness-sensitive code should use those entry points.
 
 ## Low-Level Wrapper Usage
 
-`2pcwrapper.h` exposes lower-level MPC helpers that are used by the public
+`mpc/secure_ops.h` exposes lower-level MPC helpers that are used by the public
 building blocks. They are useful when implementing a new protocol, but ordinary
-applications should prefer the higher-level APIs in `2pc_api.h` and
-`2pc_math.h`.
+applications should prefer the higher-level headers in `buildingblock/`,
+`math/`, and `legacy/math.h` only for legacy baselines.
 
 Constraint comparison compares two shared bits encoded as high/low components:
 
@@ -201,8 +212,8 @@ vectors rather than looping over scalar calls.
 
 ## DPF Usage
 
-Generate a key from shared point `alpha` and shared payload `beta`, then evaluate
-it on a query point:
+For shared target and shared query values, use the wrapper API. The wrapper
+handles BitDec, masking, and dispatch to the FSS core:
 
 ```cpp
 constexpr int Bin = 8;
@@ -210,40 +221,50 @@ constexpr int Bout = 16;
 
 GroupElement alpha = split_share(42, Bin, 7);
 GroupElement beta = split_share(1234, Bout, 99);
+GroupElement query = split_share(42, Bin, 13);
 
-DPFKeyPack key = keyGenDPF(party, Bin, Bout, alpha, beta, false);
-GroupElement out = evalDPF(party, GroupElement(42, Bin), key, false);
+DPFKeyPack key = dfss::wrapper::keyGenDPF(party, alpha, beta);
+GroupElement out = dfss::wrapper::evalDPF(party, query, key);
 
 reconstruct(&out);
-freeDPFKeyPack(key);
 ```
 
-`evalAll` evaluates the full domain without repeatedly calling scalar
+The FSS-core `dfss::keyGenDPF` API is lower level: it expects Boolean shares of
+the target bits and evaluates on public query points. New building blocks should
+prefer `dfss::wrapper::*` unless they are explicitly testing or benchmarking the
+FSS primitive itself.
+
+`evalAllDPF` evaluates the full domain without repeatedly calling scalar
 `evalDPF`, but it must materialize `2^length` outputs. Call it before releasing
 the key:
 
 ```cpp
-std::vector<GroupElement> domain(1 << Bin, GroupElement(0, Bout));
-evalAll(party, domain.data(), key, Bin);
-```
-
-Use point or batch evaluation for large domains. Full-domain `evalAll` is not an
-appropriate interface for a 32-bit domain because the output itself would contain
-`2^32` entries.
-
-For DPF-based equality tests, use the same DPF APIs with the default
-`masked=true` path:
-
-```cpp
-DPFKeyPack key = keyGenDPF(party, Bin, Bout, alpha, beta);
-GroupElement y = evalDPF(party, query_share, key);
+std::vector<GroupElement> domain(1ULL << Bin, GroupElement(0, Bout));
+dfss::wrapper::evalAllDPF(party, domain.data(), key);
 freeDPFKeyPack(key);
 ```
 
+Use point or batch evaluation for large domains. Full-domain `evalAllDPF` is not
+an appropriate interface for a 32-bit domain because the output itself would
+contain `2^32` entries.
+
+For shared-input equality, use the building-block offline/online pair. The
+plain `equality` output is arithmetic; use `equalityBit` for a 0/1 XOR bit and
+`equalityBlock` for an XOR block payload.
+
+```cpp
+EqualityKey key = equalityOffline(party, alpha, beta);
+GroupElement y = equality(party, query_share, key);
+freeEqualityKey(key);
+```
+
+The implementation goes through `fss_wrapper`, which handles shared-input
+masking, BitDec, and Boolean-share inputs before calling the FSS core. New
+building-block or math code should not call DPF/iDPF core APIs directly.
+
 ## DCF and Comparison Usage
 
-Use `keyGenNewDCF` and `evalNewDCF` for correctness-sensitive DCF code. The
-legacy `iDCF` API is kept only for compatibility and is marked deprecated.
+Use `keyGenNewDCF` and `evalNewDCF` for correctness-sensitive DCF code.
 
 `evalNewDCF` is a batch interface. For one query, pass arrays of length one:
 
@@ -269,13 +290,10 @@ For comparisons, generate the offline key once and use the online function for
 the query:
 
 ```cpp
-ComparisonKeyPack key = comparison_offline(
-    party, Bin, Bout,
-    split_share(64, Bin, 11),
-    public_share(1, Bout),
-    true);
+ComparisonKeyPack key =
+    comparisonOffline(party, Bin, Bout, public_share(1, Bout));
 
-GroupElement y = comparison(party, split_share(21, Bin, 5), key);
+GroupElement y = comparison(party, split_share(21, Bin, 5), 64, key);
 reconstruct(&y);
 freeComparisonKeyPack(key);
 ```
@@ -294,13 +312,24 @@ Most building blocks follow the same shape:
 
 ### Ring Extension
 
-Use ring extension when a shared value must move from a smaller ring to a larger
-ring while preserving the represented value:
+Use unsigned ring extension when a shared value must move from a smaller ring to
+a larger ring while preserving the represented unsigned value. The unsigned API
+is declared in `buildingblock/comparison.h`:
 
 ```cpp
-ComparisonKeyPack key = ring_extend_offline(party, Bin, Bout);
-GroupElement y = ring_extend(party, x_share, Bout, key);
+ComparisonKeyPack key = ringExtendOffline(party, Bin, Bout);
+GroupElement y = ringExtend(party, x_share, Bout, key);
 freeComparisonKeyPack(key);
+```
+
+Signed two's-complement ring extension is a separate API declared in
+`buildingblock/ring_extension.h`:
+
+```cpp
+SignedRingExtensionKeyPack key =
+    signedRingExtendOffline(party, Bin, Bout);
+GroupElement y = signedRingExtend(party, x_share, Bout, key);
+freeSignedRingExtensionKeyPack(key);
 ```
 
 ### Modular Reduction
@@ -310,24 +339,23 @@ freeComparisonKeyPack(key);
 
 ```cpp
 const int N = 64;
-ModularKeyPack key = modular_offline(party, GroupElement(N, Bin), Bout);
+ModularKeyPack key = modularOffline(party, GroupElement(N, Bin), Bout);
 GroupElement y = modular(party, x_share, N, key);
 freeModularKeyPack(key);
 ```
 
-### Truncate and Reduce
+### Truncation
 
-`truncate_and_reduce` truncates `s` low bits and returns a share in the smaller
-ring:
+`truncate` truncates `s` low bits and returns a share in the smaller ring:
 
 ```cpp
 const int s = 5;
-TRKeyPack key = truncate_and_reduce_offline(party, Bin, s);
-GroupElement y = truncate_and_reduce(party, x_share, s, key);
+TRKeyPack key = truncateOffline(party, Bin, s);
+GroupElement y = truncate(party, x_share, s, key);
 freeTRKeyPack(key);
 ```
 
-### Secure Containment
+### Legacy Containment
 
 Containment evaluates which interval contains a shared input. The online output
 buffer must have `knots_size + 1` entries:
@@ -339,14 +367,17 @@ std::vector<GroupElement> knots = {
     GroupElement(24, Bout),
 };
 ContainmentKeyPack key =
-    containment_offline_public(party, Bout, knots.data(), knots.size());
+    dfss::legacy::containmentOfflinePublic(
+        party, Bout, knots.data(), knots.size());
 
 std::vector<GroupElement> indicators(knots.size() + 1, GroupElement(0, Bout));
-containment(party, x_share, indicators.data(), knots.size(), key);
+dfss::legacy::containment(
+    party, x_share, indicators.data(), knots.size(), key);
 freeContainmentKeyPack(key);
 ```
 
-Use `containment_offline` when the knots are shared rather than public.
+Use `dfss::legacy::containmentOffline` when the knots are shared rather than
+public.
 
 ### Digit Decomposition
 
@@ -357,7 +388,7 @@ The output buffer length is `ceil(Bin / NewBitSize)`:
 const int NewBitSize = 4;
 const int digit_count = (Bin + NewBitSize - 1) / NewBitSize;
 
-DigDecKeyPack key = digdec_offline(party, Bin, NewBitSize);
+DigDecKeyPack key = digdecOffline(party, Bin, NewBitSize);
 std::vector<GroupElement> digits(digit_count, GroupElement(0, NewBitSize));
 digdec(party, x_share, digits.data(), NewBitSize, key);
 freeDigDecKeyPack(key);
@@ -369,15 +400,16 @@ For a public table, the table entries are local public values and the lookup
 index is shared:
 
 ```cpp
-const int table_size = 1 << idx_bitlen;
-std::vector<GroupElement> table(table_size, GroupElement(0, lut_bitlen));
-std::vector<GroupElement> shifted(table_size, GroupElement(0, lut_bitlen));
+PublicLUTData table = generatePublicLUT(idx_bitlen, lut_bitlen, [](uint64_t x) {
+    return 3 * x + 1;
+});
+std::vector<GroupElement> shifted(table.values.size());
 
-DPFKeyPack key = pub_lut_offline(party, idx_bitlen, lut_bitlen);
-GroupElement y = pub_lut(
-    party, idx_share, table.data(), shifted.data(),
-    table_size, lut_bitlen, key);
-freeDPFKeyPack(key);
+PublicLutOptions options;
+options.early_termination = true;  // false selects full-domain correlated DPF.
+PublicLutKeyPack key = publicLutOffline(party, table, options);
+GroupElement y = publicLut(party, idx_share, table, key, shifted.data());
+freePublicLutKeyPack(key);
 ```
 
 For a private table, pass the caller-owned shared table entries to the offline
@@ -386,8 +418,8 @@ key generation:
 ```cpp
 std::vector<GroupElement> private_table(table_size, GroupElement(0, lut_bitlen));
 PrivateLutKey key =
-    pri_lut_offline(party, idx_bitlen, lut_bitlen, private_table.data());
-GroupElement y = pri_lut(party, idx_share, key);
+    privateLutOffline(party, idx_bitlen, lut_bitlen, private_table.data());
+GroupElement y = privateLut(party, idx_share, key);
 freePrivateLutKey(key);
 ```
 
@@ -400,16 +432,16 @@ has `(degree + 1) * segNum` entries:
 std::vector<GroupElement> coefficients((degree + 1) * segNum);
 create_approx_spline(uuid, Bout, scale, coefficients.data());
 
-SplinePolyApproxKeyPack key = spline_poly_approx_offline(
+SplinePolyApproxKeyPack key = dfss::legacy::splinePolyApproxOffline(
     party, Bin, Bout, coefficients.data(), degree, segNum, scale);
-GroupElement y = spline_poly_approx(party, x_share, key);
+GroupElement y = dfss::legacy::splinePolyApprox(party, x_share, key);
 freeSplinePolyApproxKeyPack(key);
 ```
 
 The helper `create_approx_spline` constructs supported coefficient tables from
-the repository's approximation data. See `src/utils.cpp` and
-`2pc_test/BB_TEST/BuildingBlock_Test.cpp` for supported `uuid`, degree, and
-segment settings.
+the repository's approximation data. See `src/legacy/utils.cpp` and
+`src/legacy/benchmark/buildingblock/BuildingBlock_Test.cpp` for supported
+`uuid`, degree, and segment settings.
 
 ## Trigonometric and Case-Study Usage
 
@@ -523,6 +555,9 @@ evalNewDCF(party, outputs.data(), queries.data(), keys.data(), n, Bin);
 
 ## Extending the Code
 
+For source-tree layout and ownership rules, see `src/README.md`,
+`test/README.md`, and `src/legacy/README.md`.
+
 When adding a new building block:
 
 1. Define any offline key material in `keypack.h`.
@@ -532,8 +567,16 @@ When adding a new building block:
 5. Keep output arrays as `T*` plus an explicit size when the existing API style
    needs a batch buffer.
 6. Put offline/key-generation logic and online evaluation in separate functions.
-7. Add a public correctness case under `2pc_test/CORRECTNESS_TEST` when behavior
-   changes or a new public primitive is added.
+7. Add correctness coverage under the matching suite in
+   `test/correctness` when behavior changes or a new public primitive
+   is added. Use the dFSS suite for new dFSS APIs and the helper suite for
+   protocol-neutral helpers. Legacy-exposed APIs are tested under
+   `src/legacy/correctness` via
+   `src/legacy/scripts/run_legacy_correctness.sh`.
+
+Building blocks should use a `*_offline` key-generation function and an online
+function with the same base name. Reserve `keyGenX`, `evalX`, and `evalAllX`
+for primitive FSS code.
 
 For random protocol masks or key material, use the repository's cryptographic
 PRNG helpers, such as `secure_prng()` and `random_ge_from_prng()`, instead of
@@ -544,31 +587,65 @@ PRNG helpers, such as `secure_prng()` and `random_ge_from_prng()`, instead of
 Run the public correctness script from the repository root:
 
 ```bash
-scripts/run_correctness.sh
+scripts/run_correctness.sh --suite dfss
 ```
 
 Useful focused cases:
 
 ```bash
-scripts/run_correctness.sh --case 1    # DPF
-scripts/run_correctness.sh --case 2    # DCF
-scripts/run_correctness.sh --case 3    # comparison
-scripts/run_correctness.sh --case 12   # trigonometric helpers
+scripts/run_correctness.sh --suite dfss --case 1      # correlated DPF
+scripts/run_correctness.sh --suite dfss --case 4      # DPF-ET
+scripts/run_correctness.sh --suite dfss --case 12     # dFSS comparison
+scripts/run_correctness.sh --suite dfss --case 16     # MIC PolyEval
+scripts/run_correctness.sh --suite helper --case 3    # OHG helper
+src/legacy/scripts/run_legacy_correctness.sh --case 2 # legacy DCF
 ```
 
-Run the safety/performance smoke check after performance-sensitive changes:
+Correctness cases are organized by suite:
+`test/correctness/correctness.cpp` is the dFSS protocol entry point,
+`test/correctness/protocol/` contains dFSS protocol cases,
+`test/correctness/helper/` contains helper-only cases, and
+`test/correctness/common/` contains shared test utilities. Legacy correctness is
+owned by `src/legacy/correctness/Legacy_Correctness_Test.cpp`.
+
+dFSS extension benchmarks live under `test/benchmark/`: `benchmark.cpp` is the
+entry point, `helper/` contains CLI/report/metric helpers, `protocol/` contains
+main protocol benchmarks, and `microbench/` contains component microbenchmarks.
+For direct/manual use, run the C++ benchmark binary with explicit parameters:
 
 ```bash
-scripts/run_safety_perf.sh \
-    --bits 19 \
-    --output-bits 16 \
-    --repeat 5 \
-    --dcf-batch 512 \
-    --eval-all-bits 14
+./build/test/benchmark/DFSS_EXT_BENCH \
+    role=server port=32000 bench=poly bin=16 scale=8 degree=2 parts=8
+./build/test/benchmark/DFSS_EXT_BENCH \
+    role=client port=32000 bench=poly bin=16 scale=8 degree=2 parts=8
 ```
 
-The helper runs both parties on localhost and writes logs under the configured
-build directory.
+The binary supports main benchmarks
+`bench=et|dpf|idpf|lut|mic|comparison|poly|equality` and the
+`bench=payload_conversion` microbenchmark. Common parameters are `bin`,
+optional `bout` with `bout=bin` by default, `repeat`, `phase=all|offline`, and
+`output=table|csv|both`. ET-enabled benchmarks use `et=1 suffix=-1` for the
+default suffix and `et=1 suffix=N` for an explicit suffix, including
+`suffix=1`. `parts` means interval count for `bench=mic` and segment count for
+`bench=poly`. Correctness checks are on by default; pass `correctness=0` or
+`skip_correctness=1` for large sweeps where correctness has already been
+checked separately.
+
+`scripts/run_dfss_ext_bench.sh` is the two-party runner for local benchmark
+runs, raw-log capture, and CSV aggregation. It calls the same explicit C++ CLI,
+for example:
+
+```bash
+scripts/run_dfss_ext_bench.sh \
+    --bench et \
+    --bin 8 \
+    --repeat 1 \
+    --skip-configure \
+    --skip-build
+```
+
+Payload conversion is compiled into the same binary but remains a
+microbenchmark, physically separated under `test/benchmark/microbench/`.
 
 ## Troubleshooting
 
@@ -576,6 +653,6 @@ build directory.
 | --- | --- |
 | CMake cannot find EzPC | Pass `-DEZPC_ROOT=/path/to/EzPC` or set `EZPC_ROOT`. |
 | One party waits forever | Start `r=2` first, use the same port, and ensure no stale process owns the port. |
-| Link errors in a downstream test | Link `dealerless_fss` instead of manually listing source files. |
+| Link errors in a downstream test | Link `dfss`, `dfss_common`, or `dfss_legacy` according to the API layer instead of manually listing source files. |
 | Unexpected full-domain memory use | Check whether `evalAll` is being used with a large `length`. |
 | Different results across parties | Verify both parties use the same bit lengths, constants, and offline keys. |

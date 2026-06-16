@@ -12,3 +12,11 @@ cmake-build-debug/
 */Makefile
 CMakeFiles/
 cmake-build-debug-/
+thirdparty/lolremez/
+generated_public_data/
+__pycache__/
+*.py[cod]
+
+# Local macOS compiler wrappers.
+tools/apple_clang_openmp_cc.sh
+tools/apple_clang_openmp_cxx.sh
