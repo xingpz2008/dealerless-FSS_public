@@ -1,7 +1,12 @@
 # Distributed Function Secret Sharing and Applications
-Source code for the NDSS'25 paper [_Distributed Function Secret Sharing and Applications_](https://www.ndss-symposium.org/ndss-paper/distributed-function-secret-sharing-and-applications/).
+
+This repo provides implementation for:
+
+- Pengzhi Xing, et al, "Communication-Efficient Secure Nonlinear Evaluation from Dealer-less Function Secret Sharing," 2026.
+- Pengzhi Xing, Hongwei Li, Meng Hao, Hanxiao Chen, Jia Hu and Dongxiao Liu, "[Distributed Function Secret Sharing and Applications](https://www.ndss-symposium.org/ndss-paper/distributed-function-secret-sharing-and-applications/)," in Proceedings of NDSS, 2025.
 
 ## Introduction
+
 We introduce distributed key generation schemes for FSS-based distributed point
 functions and distributed comparison functions, supporting arithmetic-shared
 inputs and outputs. We further design FSS-based components optimized for online
@@ -13,7 +18,7 @@ the input bit length during FSS evaluation.
 
 - Reorganized the code into separate CMake targets: `dfss_common`, `dfss`, and
   `dfss_legacy`.
-- Isolated old NDSS-compatible code under `src/legacy` while keeping new dFSS
+- Isolated old NDSS-compatible code under `src/legacy` while keeping dFSS
   primitives and building blocks under `src/fss`, `src/buildingblock`, and
   `src/math`.
 - Added explicit correctness targets and scripts for dFSS protocols, helper
@@ -21,13 +26,15 @@ the input bit length during FSS evaluation.
 - Added a dFSS benchmark driver with explicit CLI parameters and separate
   protocol/microbenchmark implementations.
 - Added generic public-LUT and MIC-based piecewise-polynomial evaluation
-  support for the new dFSS library.
+  support for the dFSS library.
 - Kept legacy trigonometric and case-study drivers available as isolated
   compatibility/baseline code.
 
 ## Contents
+
 This repository consists of the following parts:
-- __src__: New dFSS library code plus isolated legacy compatibility/baseline
+
+- __src__: dFSS library code plus isolated legacy compatibility/baseline
   code.
 - __test__: dFSS correctness tests and dFSS benchmark drivers.
 - __scripts__: Build, correctness, benchmark, and validation helpers for a
@@ -38,6 +45,7 @@ This repository consists of the following parts:
 - __docs__: Public developer usage guide and documentation index.
 
 ## Installation
+
 The implementation builds against a local [EzPC](https://github.com/mpc-msri/EzPC)
 checkout. EzPC provides the FSS and SCI source trees used by this repository.
 
@@ -125,6 +133,7 @@ scripts/run_correctness.sh --skip-configure --skip-build    # reuse an existing 
 ```
 
 ## Usage
+
 For developer-facing usage, integration notes, key lifetime rules, and extension
 guidelines, see [`docs/developer-usage.md`](docs/developer-usage.md).
 
@@ -133,9 +142,11 @@ directly. They can also be used as reference code for integrating the FSS
 routines into post-compiled EzPC/Athos workflows.
 
 ## Disclaimer
+
 This repository is a proof-of-concept prototype.
 
 ## Cite Us
+
 ```
 @inproceedings{dealerfss25xing,
   author       = {Pengzhi Xing and
