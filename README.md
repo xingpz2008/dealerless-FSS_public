@@ -101,6 +101,10 @@ stay under the configured build directory.
 
 ### Correctness Check
 
+Important: correctness checks are currently recommended with Clang/AppleClang.
+If you use another compiler and see build or correctness issues, reconfigure the
+project with `-DCMAKE_CXX_COMPILER=clang++`.
+
 Run the public correctness helper from the repository root:
 
 ```bash

@@ -2,6 +2,14 @@ cmake_minimum_required(VERSION 3.13)
 
 project(DealerlessFSS LANGUAGES CXX)
 
+if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    message(WARNING
+        "Correctness checks are primarily recommended with Clang/AppleClang. "
+        "The current C++ compiler is '${CMAKE_CXX_COMPILER_ID}'. "
+        "If you encounter build or correctness issues, reconfigure with "
+        "-DCMAKE_CXX_COMPILER=clang++.")
+endif()
+
 option(DEALERLESS_BUILD_TESTS "Build dealerless FSS example programs" ON)
 
 set(EZPC_ROOT "" CACHE PATH "Path to the EzPC checkout used as a dependency")
