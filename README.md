@@ -2,7 +2,7 @@
 
 This repo provides implementation for:
 
-- Pengzhi Xing, et al, "Communication-Efficient Secure Nonlinear Evaluation from Dealer-less Function Secret Sharing," 2026.
+- Pengzhi Xing, Rui Zhang, Meng Hao, Hanxiao Chen, Dongxiao Liu, Guomin Yang, Hongwei Li, Robert H. Deng, "Communication-Efficient Secure Nonlinear Evaluation from Dealer-less Function Secret Sharing," 2026.
 - Pengzhi Xing, Hongwei Li, Meng Hao, Hanxiao Chen, Jia Hu and Dongxiao Liu, "[Distributed Function Secret Sharing and Applications](https://www.ndss-symposium.org/ndss-paper/distributed-function-secret-sharing-and-applications/)," in Proceedings of NDSS, 2025.
 
 ## Introduction
